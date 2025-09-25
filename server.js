@@ -107,6 +107,7 @@ app.get('/api/rooms', (req, res) => {
   const roomList = Array.from(gameRooms.entries()).map(([roomId, room]) => ({
     roomId,
     name: room.name,
+    scoreRule: room.scoreRule,
     playerCount: Array.from(room.players.values()).filter(p => p.isPlayer).length,
     spectatorCount: Array.from(room.players.values()).filter(p => !p.isPlayer).length,
     totalCount: room.players.size,
@@ -127,9 +128,9 @@ app.get('/api/rooms', (req, res) => {
   });
 });
 
-// REST API - 部屋作成（曲選択削除）
+// REST API - 部屋作成（スコアルール対応）
 app.post('/api/rooms', express.json(), (req, res) => {
-  const { roomName, password, userId } = req.body;
+  const { roomName, password, userId, scoreRule } = req.body;
   
   if (!roomName || !userId) {
     return res.status(400).json({ 
@@ -140,6 +141,12 @@ app.post('/api/rooms', express.json(), (req, res) => {
   if (roomName.length > 30 || userId.length > 20) {
     return res.status(400).json({ 
       error: 'roomName max 30 chars, userId max 20 chars' 
+    });
+  }
+
+  if (scoreRule && !['normal', 'ex'].includes(scoreRule)) {
+    return res.status(400).json({ 
+      error: 'scoreRule must be either "normal" or "ex"' 
     });
   }
 
@@ -154,12 +161,13 @@ app.post('/api/rooms', express.json(), (req, res) => {
     roomId = generateRoomId();
   } while (gameRooms.has(roomId));
 
-  // 部屋作成（曲管理システム付き）
+  // 部屋作成（スコアルール付き）
   const room = {
     id: roomId,
     name: roomName.trim(),
     password: password ? hashPassword(password.trim()) : null,
     creator: userId.trim(),
+    scoreRule: scoreRule || 'normal', // デフォルトは通常スコア
     players: new Map(),
     createdAt: Date.now(),
     lastActivity: Date.now(),
@@ -179,11 +187,12 @@ app.post('/api/rooms', express.json(), (req, res) => {
     success: true,
     roomId: roomId,
     roomName: room.name,
+    scoreRule: room.scoreRule,
     hasPassword: !!room.password
   });
 
   broadcastRoomList();
-  console.log(`🏠 Room created: ${roomId} (${roomName}) by ${userId}`);
+  console.log(`🏠 Room created: ${roomId} (${roomName}) by ${userId} - Score rule: ${room.scoreRule}`);
 });
 
 // REST API - 部屋参加検証
@@ -208,7 +217,7 @@ app.post('/api/rooms/:roomId/join', express.json(), (req, res) => {
     success: true,
     roomId: roomId,
     roomName: room.name,
-    playerCount: room.players.size,
+    scoreRule: room.scoreRule,
     creator: room.creator,
     currentSong: room.currentSong,
     songHistory: room.songHistory
@@ -228,12 +237,20 @@ io.on('connection', (socket) => {
 
   // 部屋作成（Web UI用）
   socket.on('create_room', (data) => {
-    const { roomName, password, userId } = data;
+    const { roomName, password, userId, scoreRule } = data;
     
     if (!roomName || !userId) {
       socket.emit('error', { 
         message: '必要な情報が不足しています',
         code: 'MISSING_DATA' 
+      });
+      return;
+    }
+
+    if (scoreRule && !['normal', 'ex'].includes(scoreRule)) {
+      socket.emit('error', { 
+        message: 'スコアルールが無効です',
+        code: 'INVALID_SCORE_RULE' 
       });
       return;
     }
@@ -258,6 +275,7 @@ io.on('connection', (socket) => {
       name: roomName.trim(),
       password: password ? hashPassword(password.trim()) : null,
       creator: userId.trim(),
+      scoreRule: scoreRule || 'normal',
       players: new Map(),
       createdAt: Date.now(),
       lastActivity: Date.now(),
@@ -273,7 +291,9 @@ io.on('connection', (socket) => {
     // 作成者をプレイヤーとして追加
     room.players.set(socket.id, {
       userId: userId.trim(),
-      score: 0,
+      normalScore: 0,
+      exScore: 0,
+      displayScore: 0, // 表示用スコア（ルールに応じて変更）
       lastUpdate: Date.now(),
       joinTime: Date.now(),
       isCreator: true,
@@ -287,7 +307,9 @@ io.on('connection', (socket) => {
     connections.set(socket.id, {
       userId: userId.trim(),
       roomId: roomId,
-      score: 0,
+      normalScore: 0,
+      exScore: 0,
+      displayScore: 0,
       joinTime: Date.now()
     });
 
@@ -296,6 +318,7 @@ io.on('connection', (socket) => {
     socket.emit('room_created', {
       roomId,
       roomName: room.name,
+      scoreRule: room.scoreRule,
       playerCount: room.players.size,
       currentSong: room.currentSong
     });
@@ -303,7 +326,7 @@ io.on('connection', (socket) => {
     broadcastRoom(roomId);
     broadcastRoomList();
 
-    console.log(`🏠 Room created: ${roomId} (${roomName}) by ${userId}`);
+    console.log(`🏠 Room created: ${roomId} (${roomName}) by ${userId} - Score rule: ${room.scoreRule}`);
   });
 
   // 部屋参加
@@ -347,7 +370,9 @@ io.on('connection', (socket) => {
 
     room.players.set(socket.id, {
       userId: userId.trim(),
-      score: 0,
+      normalScore: 0,
+      exScore: 0,
+      displayScore: 0, // ルールに応じた表示用スコア
       lastUpdate: Date.now(),
       joinTime: Date.now(),
       isCreator: false,
@@ -367,7 +392,9 @@ io.on('connection', (socket) => {
     connections.set(socket.id, {
       userId: userId.trim(),
       roomId: roomId,
-      score: 0,
+      normalScore: 0,
+      exScore: 0,
+      displayScore: 0,
       joinTime: Date.now()
     });
 
@@ -376,6 +403,7 @@ io.on('connection', (socket) => {
     socket.emit('room_joined', {
       roomId,
       roomName: room.name,
+      scoreRule: room.scoreRule,
       playerCount: Array.from(room.players.values()).filter(p => p.isPlayer).length,
       spectatorCount: Array.from(room.players.values()).filter(p => !p.isPlayer).length,
       creator: room.creator,
@@ -408,7 +436,9 @@ io.on('connection', (socket) => {
 
     room.players.set(socket.id, {
       userId: userId.trim(),
-      score: 0,
+      normalScore: 0,
+      exScore: 0,
+      displayScore: 0,
       lastUpdate: Date.now(),
       joinTime: Date.now(),
       isCreator: false,
@@ -427,7 +457,9 @@ io.on('connection', (socket) => {
     connections.set(socket.id, {
       userId: userId.trim(),
       roomId: roomId,
-      score: 0,
+      normalScore: 0,
+      exScore: 0,
+      displayScore: 0,
       joinTime: Date.now(),
       isPythonClient: true
     });
@@ -437,6 +469,7 @@ io.on('connection', (socket) => {
     socket.emit('room_joined_python', {
       roomId,
       roomName: room.name,
+      scoreRule: room.scoreRule,
       playerCount: Array.from(room.players.values()).filter(p => p.isPlayer).length,
       spectatorCount: Array.from(room.players.values()).filter(p => !p.isPlayer).length,
       creator: room.creator,
@@ -468,8 +501,12 @@ io.on('connection', (socket) => {
 
     // 観戦者になった場合はスコアを0にリセット
     if (!player.isPlayer) {
-      player.score = 0;
-      conn.score = 0;
+      player.normalScore = 0;
+      player.exScore = 0;
+      player.displayScore = 0;
+      conn.normalScore = 0;
+      conn.exScore = 0;
+      conn.displayScore = 0;
     }
 
     room.lastActivity = Date.now();
@@ -490,6 +527,7 @@ io.on('connection', (socket) => {
     const roomList = Array.from(gameRooms.entries()).map(([roomId, room]) => ({
       roomId,
       name: room.name,
+      scoreRule: room.scoreRule,
       playerCount: Array.from(room.players.values()).filter(p => p.isPlayer).length,
       spectatorCount: Array.from(room.players.values()).filter(p => !p.isPlayer).length,
       totalCount: room.players.size,
@@ -507,8 +545,8 @@ io.on('connection', (socket) => {
     });
   });
 
-  // スコア更新
-  socket.on('score_update', (score) => {
+  // スコア更新（スコアルール対応）
+  socket.on('score_update', (data) => {
     const conn = connections.get(socket.id);
     if (!conn) return;
 
@@ -520,24 +558,52 @@ io.on('connection', (socket) => {
     // 観戦者のスコアは無視
     if (!player.isPlayer) return;
 
-    if (typeof score !== 'number' || score < 0 || score > 99999999) {
+    // データ形式の判定（後方互換性）
+    let normalScore, exScore;
+    
+    if (typeof data === 'number') {
+      // 旧形式：単一スコア（通常スコアとして扱う）
+      normalScore = data;
+      exScore = data; // EXスコアも同じ値
+    } else if (typeof data === 'object') {
+      // 新形式：両方のスコア
+      normalScore = data.normalScore || data.score || 0;
+      exScore = data.exScore || data.score || 0;
+    } else {
+      return; // 無効なデータ
+    }
+
+    // スコア妥当性チェック
+    if (typeof normalScore !== 'number' || normalScore < 0 || normalScore > 99999999 ||
+        typeof exScore !== 'number' || exScore < 0 || exScore > 99999999) {
       return;
     }
 
-    const roundedScore = Math.floor(score);
-    conn.score = roundedScore;
-    player.score = roundedScore;
+    const roundedNormalScore = Math.floor(normalScore);
+    const roundedExScore = Math.floor(exScore);
+    
+    // 部屋のルールに応じて表示用スコアを決定
+    const displayScore = room.scoreRule === 'ex' ? roundedExScore : roundedNormalScore;
+
+    // データ更新
+    conn.normalScore = roundedNormalScore;
+    conn.exScore = roundedExScore;
+    conn.displayScore = displayScore;
+    
+    player.normalScore = roundedNormalScore;
+    player.exScore = roundedExScore;
+    player.displayScore = displayScore;
     player.lastUpdate = Date.now();
     room.lastActivity = Date.now();
     room.lastScoreUpdate = Date.now();
     
-    // 全員0点チェック
+    // 全員0点チェック（表示用スコアで判定）
     checkAllZeroScores(conn.roomId);
     
     broadcastRoom(conn.roomId);
   });
 
-  // Pythonクライアント用スコア更新
+  // Pythonクライアント用スコア更新（スコアルール対応）
   socket.on('score_update_python', (data) => {
     const conn = connections.get(socket.id);
     if (!conn) return;
@@ -548,15 +614,28 @@ io.on('connection', (socket) => {
     const player = room.players.get(socket.id);
     if (!player.isPlayer) return; // 観戦者は無視
 
-    const { score, metadata } = data;
+    const { normalScore, exScore, metadata } = data;
     
-    if (typeof score !== 'number' || score < 0 || score > 99999999) {
+    // スコア妥当性チェック
+    if (typeof normalScore !== 'number' || normalScore < 0 || normalScore > 99999999 ||
+        typeof exScore !== 'number' || exScore < 0 || exScore > 99999999) {
       return;
     }
 
-    const roundedScore = Math.floor(score);
-    conn.score = roundedScore;
-    player.score = roundedScore;
+    const roundedNormalScore = Math.floor(normalScore);
+    const roundedExScore = Math.floor(exScore);
+    
+    // 部屋のルールに応じて表示用スコアを決定
+    const displayScore = room.scoreRule === 'ex' ? roundedExScore : roundedNormalScore;
+
+    // データ更新
+    conn.normalScore = roundedNormalScore;
+    conn.exScore = roundedExScore;
+    conn.displayScore = displayScore;
+    
+    player.normalScore = roundedNormalScore;
+    player.exScore = roundedExScore;
+    player.displayScore = displayScore;
     player.lastUpdate = Date.now();
     player.metadata = metadata || {};
     room.lastActivity = Date.now();
@@ -588,7 +667,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 全員0点チェック関数
+  // 全員0点チェック関数（表示用スコアで判定）
   function checkAllZeroScores(roomId) {
     const room = gameRooms.get(roomId);
     if (!room) return;
@@ -596,7 +675,7 @@ io.on('connection', (socket) => {
     const players = Array.from(room.players.values()).filter(p => p.isPlayer);
     if (players.length === 0) return;
 
-    const allZero = players.every(p => p.score === 0);
+    const allZero = players.every(p => p.displayScore === 0);
     
     if (allZero) {
       // 全員0点の状態
@@ -615,22 +694,24 @@ io.on('connection', (socket) => {
     }
   }
 
-  // 曲終了時のランキング確定
+  // 曲終了時のランキング確定（表示用スコアで集計）
   function finalizeSongRanking(roomId) {
     const room = gameRooms.get(roomId);
     if (!room) return;
 
     const players = Array.from(room.players.values())
-      .filter(p => p.isPlayer && p.score > 0) // プレイヤーかつスコア > 0
-      .sort((a, b) => b.score - a.score);
+      .filter(p => p.isPlayer && p.displayScore > 0) // プレイヤーかつ表示スコア > 0
+      .sort((a, b) => b.displayScore - a.displayScore);
 
     if (players.length === 0) return;
 
-    // ランキング記録
+    // ランキング記録（表示用スコアと両方のスコアを保存）
     const ranking = players.map((player, index) => ({
       rank: index + 1,
       userId: player.userId,
-      score: player.score,
+      displayScore: player.displayScore,
+      normalScore: player.normalScore,
+      exScore: player.exScore,
       points: index === 0 ? 2 : index === 1 ? 1 : 0 // 1位=2pt, 2位=1pt, 3位以下=0pt
     }));
 
@@ -643,17 +724,21 @@ io.on('connection', (socket) => {
     // 履歴に追加
     room.songHistory.push({
       songNumber: room.currentSong,
+      scoreRule: room.scoreRule,
       ranking: ranking,
       timestamp: Date.now()
     });
 
     room.currentSong++;
 
-    console.log(`🏁 Song ${room.currentSong - 1} finished in room ${roomId}:`, ranking.map(r => `${r.rank}位 ${r.userId}(${r.points}pt)`).join(', '));
+    const scoreRuleText = room.scoreRule === 'ex' ? 'EXスコア' : '通常スコア';
+    console.log(`🏁 Song ${room.currentSong - 1} finished in room ${roomId} (${scoreRuleText}):`, 
+                ranking.map(r => `${r.rank}位 ${r.userId}(${r.points}pt)`).join(', '));
 
     // 全員にランキング通知
     io.to(roomId).emit('song_finished', {
       songNumber: room.currentSong - 1,
+      scoreRule: room.scoreRule,
       ranking: ranking,
       totalPoints: Array.from(room.playerPoints.entries()).map(([userId, points]) => ({userId, points})).sort((a, b) => b.points - a.points),
       nextSong: room.currentSong
@@ -697,14 +782,16 @@ io.on('connection', (socket) => {
     const players = Array.from(room.players.entries())
       .map(([socketId, data]) => ({
         userId: data.userId,
-        score: data.score,
+        displayScore: data.displayScore,
+        normalScore: data.normalScore,
+        exScore: data.exScore,
         lastUpdate: data.lastUpdate,
         isCreator: data.isCreator,
         isPlayer: data.isPlayer,
         isPythonClient: data.isPythonClient
       }))
       .filter(p => p.isPlayer) // プレイヤーのみ表示
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.displayScore - a.displayScore);
 
     const spectators = Array.from(room.players.values())
       .filter(p => !p.isPlayer)
@@ -713,11 +800,11 @@ io.on('connection', (socket) => {
         isPythonClient: p.isPythonClient
       }));
 
-    const topScore = players[0]?.score || 0;
+    const topScore = players[0]?.displayScore || 0;
     const result = players.map((player, idx) => ({
       ...player,
       rank: idx + 1,
-      diff: idx === 0 ? 0 : topScore - player.score
+      diff: idx === 0 ? 0 : topScore - player.displayScore
     }));
 
     const totalPoints = Array.from(room.playerPoints.entries())
@@ -727,6 +814,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('room_update', {
       roomId,
       roomName: room.name,
+      scoreRule: room.scoreRule,
       currentSong: room.currentSong,
       players: result,
       spectators: spectators,
@@ -741,6 +829,7 @@ io.on('connection', (socket) => {
     const roomList = Array.from(gameRooms.entries()).map(([roomId, room]) => ({
       roomId,
       name: room.name,
+      scoreRule: room.scoreRule,
       playerCount: Array.from(room.players.values()).filter(p => p.isPlayer).length,
       spectatorCount: Array.from(room.players.values()).filter(p => !p.isPlayer).length,
       totalCount: room.players.size,

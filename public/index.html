@@ -485,6 +485,13 @@
                     <label>部屋名:</label>
                     <input type="text" id="roomName" placeholder="部屋の名前" maxlength="30" disabled>
                 </div>
+                <div class="form-group">
+                    <label>スコアルール:</label>
+                    <select id="scoreRule" disabled>
+                        <option value="normal">通常スコア</option>
+                        <option value="ex">EXスコア</option>
+                    </select>
+                </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="usePassword" disabled>
                     <label for="usePassword">パスワードを設定</label>
@@ -512,7 +519,8 @@
             <div class="section game-area">
                 <div id="roomInfo" class="status in-room">
                     部屋: <span id="currentRoomName">-</span> | 
-                    曲: <span id="currentSongNumber">1</span>曲目
+                    曲: <span id="currentSongNumber">1</span>曲目 |
+                    ルール: <span id="currentScoreRule">通常スコア</span>
                     <span id="playerStatus"></span>
                 </div>
                 
@@ -528,6 +536,10 @@
                         <div class="score-display">
                             <div>現在のスコア</div>
                             <div id="currentScore" class="score-number">0</div>
+                            <div style="font-size: 16px; margin-top: 10px;">
+                                <div>通常: <span id="normalScore">0</span></div>
+                                <div>EX: <span id="exScore">0</span></div>
+                            </div>
                         </div>
 
                         <div id="scoreControls">
@@ -707,6 +719,7 @@
                 updateStatus(`部屋作成: ${data.roomName}`, 'in-room');
                 document.getElementById('currentRoomName').textContent = data.roomName;
                 document.getElementById('currentSongNumber').textContent = data.currentSong || 1;
+                document.getElementById('currentScoreRule').textContent = getScoreRuleText(data.scoreRule);
                 updatePlayerStatusDisplay();
                 showGameArea();
                 console.log('🏠 部屋が作成されました:', data);
@@ -718,6 +731,7 @@
                 updateStatus(`部屋参加: ${data.roomName}`, isPlayer ? 'in-room' : 'spectator');
                 document.getElementById('currentRoomName').textContent = data.roomName;
                 document.getElementById('currentSongNumber').textContent = data.currentSong || 1;
+                document.getElementById('currentScoreRule').textContent = getScoreRuleText(data.scoreRule);
                 updatePlayerStatusDisplay();
                 showGameArea();
                 
@@ -883,7 +897,7 @@
 
         // UI制御
         function enableControls(enabled) {
-            const controls = ['roomName', 'usePassword', 'roomPassword', 'createRoomBtn', 'refreshRoomsBtn'];
+            const controls = ['roomName', 'scoreRule', 'usePassword', 'roomPassword', 'createRoomBtn', 'refreshRoomsBtn'];
             controls.forEach(id => {
                 document.getElementById(id).disabled = !enabled;
             });
@@ -934,6 +948,7 @@
             if (!isConnected) return;
 
             const roomName = document.getElementById('roomName').value.trim();
+            const scoreRule = document.getElementById('scoreRule').value;
             const usePassword = document.getElementById('usePassword').checked;
             const password = usePassword ? document.getElementById('roomPassword').value.trim() : '';
 
@@ -949,6 +964,7 @@
 
             socket.emit('create_room', {
                 roomName,
+                scoreRule,
                 password: usePassword ? password : null,
                 userId: currentUserId
             });
@@ -1024,6 +1040,9 @@
                 if (room.hasPassword) classes.push('has-password');
                 if (isFull) classes.push('full');
                 
+                const scoreRuleText = getScoreRuleText(room.scoreRule);
+                const scoreRuleIcon = room.scoreRule === 'ex' ? '⚡' : '📊';
+                
                 return `
                     <div class="${classes.join(' ')}">
                         <div class="room-header">
@@ -1037,10 +1056,10 @@
                             </div>
                         </div>
                         <div class="room-info">
-                            ${room.currentSong}曲目進行中 | 完了曲数: ${room.songHistory} | 作成者: ${room.creator}
+                            ${scoreRuleIcon} ${scoreRuleText} | ${room.currentSong}曲目進行中 | 完了曲数: ${room.songHistory}
                         </div>
                         <div class="room-info">
-                            作成: ${new Date(room.createdAt).toLocaleString()}
+                            作成者: ${room.creator} | 作成: ${new Date(room.createdAt).toLocaleString()}
                         </div>
                         <div class="room-actions">
                             <button onclick="joinRoom('${room.roomId}', '${room.name}', ${room.hasPassword}, true)" 
@@ -1145,18 +1164,23 @@
                 return;
             }
 
-            songHistory.innerHTML = history.slice().reverse().map(song => `
-                <div class="history-item">
-                    <div class="history-header">
-                        第${song.songNumber}曲 - ${new Date(song.timestamp).toLocaleTimeString()}
+            songHistory.innerHTML = history.slice().reverse().map(song => {
+                const scoreRuleText = getScoreRuleText(song.scoreRule);
+                const scoreRuleIcon = song.scoreRule === 'ex' ? '⚡' : '📊';
+                
+                return `
+                    <div class="history-item">
+                        <div class="history-header">
+                            第${song.songNumber}曲 (${scoreRuleIcon} ${scoreRuleText}) - ${new Date(song.timestamp).toLocaleTimeString()}
+                        </div>
+                        <div class="history-ranking">
+                            ${song.ranking.map(r => 
+                                `${r.rank}位 ${r.userId}: ${r.displayScore.toLocaleString()}点 (+${r.points}pt)`
+                            ).join(' | ')}
+                        </div>
                     </div>
-                    <div class="history-ranking">
-                        ${song.ranking.map(r => 
-                            `${r.rank}位 ${r.userId}: ${r.score.toLocaleString()}点 (+${r.points}pt)`
-                        ).join(' | ')}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // モーダル制御
@@ -1175,6 +1199,9 @@
             document.getElementById('finishedSongNumber').textContent = data.songNumber;
             document.getElementById('nextSongNumber').textContent = data.nextSong;
             
+            const scoreRuleText = getScoreRuleText(data.scoreRule);
+            const scoreRuleIcon = data.scoreRule === 'ex' ? '⚡' : '📊';
+            
             // 曲結果表示
             const songRanking = document.getElementById('songRanking');
             songRanking.innerHTML = data.ranking.map((entry, index) => {
@@ -1186,10 +1213,19 @@
                 return `
                     <div class="${classes.join(' ')}">
                         <span>${entry.rank}位 ${entry.userId}</span>
-                        <span>${entry.score.toLocaleString()}点 (+${entry.points}pt)</span>
+                        <span>
+                            ${scoreRuleIcon} ${entry.displayScore.toLocaleString()}点 (+${entry.points}pt)
+                            <div style="font-size: 12px; opacity: 0.7;">
+                                📊${entry.normalScore.toLocaleString()} ⚡${entry.exScore.toLocaleString()}
+                            </div>
+                        </span>
                     </div>
                 `;
             }).join('');
+            
+            // タイトルにスコアルールを表示
+            document.querySelector('#songFinishedModal h3').innerHTML = 
+                `🏁 第${data.songNumber}曲目 結果発表！(${scoreRuleIcon} ${scoreRuleText})`;
             
             // 累積ポイント表示
             const totalPointsRanking = document.getElementById('totalPointsRanking');
