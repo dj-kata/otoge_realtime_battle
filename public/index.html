@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎵 音ゲー部屋システム</title>
+    <title>SDVX Realtime Battle β</title>
     <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -17,7 +17,7 @@
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: rgba(255,255,255,0.1);
             border-radius: 15px;
@@ -61,6 +61,7 @@
         .connected { background: rgba(76,175,80,0.8); }
         .disconnected { background: rgba(244,67,54,0.8); }
         .in-room { background: rgba(255,193,7,0.8); color: #333; }
+        .spectator { background: rgba(156,39,176,0.8); }
         
         input, select, button {
             width: 100%;
@@ -96,6 +97,20 @@
         }
         .btn-danger:hover:not(:disabled) {
             box-shadow: 0 4px 15px rgba(244,67,54,0.4);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(45deg, #9C27B0, #7B1FA2);
+        }
+        .btn-secondary:hover:not(:disabled) {
+            box-shadow: 0 4px 15px rgba(156,39,176,0.4);
+        }
+        
+        .btn-small {
+            width: auto;
+            padding: 8px 16px;
+            font-size: 14px;
+            margin: 2px 5px;
         }
         
         .form-group {
@@ -157,11 +172,15 @@
             font-weight: bold;
             font-size: 18px;
         }
-        .room-players {
+        .room-stats {
+            display: flex;
+            gap: 10px;
+        }
+        .room-count {
             background: rgba(255,255,255,0.3);
             padding: 4px 8px;
             border-radius: 12px;
-            font-size: 14px;
+            font-size: 12px;
         }
         
         .room-info {
@@ -172,16 +191,29 @@
         
         .room-actions {
             margin-top: 10px;
+            display: flex;
+            gap: 5px;
         }
         .room-actions button {
             width: auto;
             padding: 8px 16px;
-            margin-right: 10px;
             font-size: 14px;
         }
         
         .game-area {
             grid-column: 1 / -1;
+        }
+        
+        .game-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .current-game {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
             text-align: center;
         }
         
@@ -197,16 +229,31 @@
             color: #FFD700;
         }
         
+        .control-panel {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
         .leaderboard {
             background: rgba(255,255,255,0.1);
             border-radius: 10px;
-            margin-top: 20px;
         }
+        .leaderboard h4 {
+            margin: 0 0 15px 0;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+        }
+        
         .player {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
+            padding: 12px 20px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         .player:last-child { border-bottom: none; }
@@ -221,26 +268,99 @@
         .player.creator .name::after {
             content: " 👑";
         }
+        .player.python .name::before {
+            content: "🐍 ";
+        }
         
         .rank { 
             font-weight: bold; 
-            min-width: 50px;
-            font-size: 18px;
+            min-width: 40px;
+            font-size: 16px;
         }
         .name { 
             flex: 1; 
             text-align: left;
-            margin-left: 20px;
+            margin-left: 15px;
         }
         .score { 
             font-weight: bold; 
-            min-width: 100px; 
+            min-width: 90px; 
             text-align: right;
+            font-size: 14px;
         }
         .diff { 
             color: #ff9800; 
-            min-width: 80px; 
+            min-width: 70px; 
             text-align: right;
+            font-size: 12px;
+        }
+        
+        .spectator-list {
+            background: rgba(156,39,176,0.2);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .spectator-list h5 {
+            margin: 0 0 10px 0;
+            color: #E1BEE7;
+        }
+        .spectator-item {
+            padding: 5px 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        
+        .points-table {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+        .points-table h4 {
+            margin: 0 0 15px 0;
+            padding: 15px;
+            background: rgba(255,193,7,0.3);
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .point-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .point-item:last-child { border-bottom: none; }
+        .point-item.first { background: rgba(255,215,0,0.3); }
+        .point-item.second { background: rgba(192,192,192,0.3); }
+        .point-item.third { background: rgba(205,127,50,0.3); }
+        
+        .song-history {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .song-history h4 {
+            margin: 0 0 15px 0;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .history-item {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .history-item:last-child { border-bottom: none; }
+        .history-header {
+            font-weight: bold;
+            color: #FFD700;
+            margin-bottom: 10px;
+        }
+        .history-ranking {
             font-size: 14px;
         }
         
@@ -294,6 +414,32 @@
         }
         .close:hover { color: white; }
         
+        .song-finished-modal .modal-content {
+            max-width: 500px;
+            text-align: center;
+        }
+        .ranking-list {
+            margin: 20px 0;
+        }
+        .ranking-item {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .ranking-item.first { background: rgba(255,215,0,0.4); }
+        .ranking-item.second { background: rgba(192,192,192,0.4); }
+        .ranking-item.third { background: rgba(205,127,50,0.4); }
+        
+        @media (max-width: 1200px) {
+            .game-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -316,7 +462,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎵 音ゲー対戦ルーム</h1>
+            <h1>🎵 音ゲー大会システム</h1>
             <div id="status" class="status disconnected">切断中</div>
         </div>
 
@@ -338,15 +484,6 @@
                 <div class="form-group">
                     <label>部屋名:</label>
                     <input type="text" id="roomName" placeholder="部屋の名前" maxlength="30" disabled>
-                </div>
-                <div class="form-group">
-                    <label>曲:</label>
-                    <select id="songSelect" disabled>
-                        <option value="song001">テスト曲A (Easy)</option>
-                        <option value="song002">テスト曲B (Normal)</option>
-                        <option value="song003">テスト曲C (Hard)</option>
-                        <option value="song004">ボス曲X (Expert)</option>
-                    </select>
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="usePassword" disabled>
@@ -375,32 +512,66 @@
             <div class="section game-area">
                 <div id="roomInfo" class="status in-room">
                     部屋: <span id="currentRoomName">-</span> | 
-                    曲: <span id="currentSongName">-</span>
+                    曲: <span id="currentSongNumber">1</span>曲目
+                    <span id="playerStatus"></span>
                 </div>
                 
-                <button onclick="leaveRoom()" class="btn-danger">部屋を出る</button>
-
-                <div class="score-display">
-                    <div>現在のスコア</div>
-                    <div id="currentScore" class="score-number">0</div>
+                <div class="control-panel">
+                    <button onclick="leaveRoom()" class="btn-danger btn-small">部屋を出る</button>
+                    <button id="togglePlayerBtn" onclick="togglePlayerStatus()" class="btn-secondary btn-small">観戦者に切り替え</button>
                 </div>
 
-                <div class="slider-container">
-                    <label>スコア調整 (テスト用):</label>
-                    <input type="range" id="scoreSlider" class="slider" 
-                           min="0" max="2000000" value="0" step="1000"
-                           oninput="updateScore(this.value)">
+                <div class="game-content">
+                    <!-- 現在のゲーム -->
+                    <div class="current-game">
+                        <h4>🎮 現在のゲーム</h4>
+                        <div class="score-display">
+                            <div>現在のスコア</div>
+                            <div id="currentScore" class="score-number">0</div>
+                        </div>
+
+                        <div id="scoreControls">
+                            <div class="slider-container">
+                                <label>スコア調整 (テスト用):</label>
+                                <input type="range" id="scoreSlider" class="slider" 
+                                       min="0" max="2000000" value="0" step="1000"
+                                       oninput="updateScore(this.value)">
+                            </div>
+
+                            <div style="text-align: center;">
+                                <button onclick="simulateGame()" class="btn-small">🎮 ゲームシミュレーション</button>
+                                <button onclick="randomScore()" class="btn-small">🎲 ランダムスコア</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- リアルタイムランキング -->
+                    <div class="leaderboard">
+                        <h4>🏆 現在のランキング</h4>
+                        <div id="leaderboard">
+                            <div class="empty-state">スコア情報を受信中...</div>
+                        </div>
+                        
+                        <div id="spectatorSection" class="spectator-list hidden">
+                            <h5>👀 観戦者</h5>
+                            <div id="spectatorList"></div>
+                        </div>
+                    </div>
+
+                    <!-- 累積ポイント -->
+                    <div class="points-table">
+                        <h4>🏆 累積ポイント</h4>
+                        <div id="pointsTable">
+                            <div class="empty-state">ポイント情報がありません</div>
+                        </div>
+                    </div>
                 </div>
 
-                <div style="text-align: center; margin: 20px 0;">
-                    <button onclick="simulateGame()">🎮 ゲームシミュレーション</button>
-                    <button onclick="randomScore()">🎲 ランダムスコア</button>
-                </div>
-
-                <div class="leaderboard">
-                    <h3>🏆 リアルタイムランキング</h3>
-                    <div id="leaderboard">
-                        <div class="empty-state">スコア情報を受信中...</div>
+                <!-- 曲履歴 -->
+                <div class="song-history">
+                    <h4>📜 曲履歴</h4>
+                    <div id="songHistory">
+                        <div class="empty-state">まだ曲が終了していません</div>
                     </div>
                 </div>
             </div>
@@ -415,8 +586,24 @@
             <p>部屋 "<span id="modalRoomName">-</span>" に参加するにはパスワードを入力してください。</p>
             <input type="password" id="joinPassword" placeholder="パスワードを入力" maxlength="20">
             <br><br>
-            <button onclick="joinRoomWithPassword()">参加</button>
+            <div class="control-panel">
+                <button onclick="joinRoomWithPassword(true)" class="btn-small">プレイヤーとして参加</button>
+                <button onclick="joinRoomWithPassword(false)" class="btn-secondary btn-small">観戦者として参加</button>
+            </div>
             <button onclick="closePasswordModal()" class="btn-danger">キャンセル</button>
+        </div>
+    </div>
+
+    <!-- 曲終了モーダル -->
+    <div id="songFinishedModal" class="modal song-finished-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeSongFinishedModal()">&times;</span>
+            <h3>🏁 <span id="finishedSongNumber">1</span>曲目 結果発表！</h3>
+            <div id="songRanking" class="ranking-list"></div>
+            <h4>🏆 累積ポイントランキング</h4>
+            <div id="totalPointsRanking" class="ranking-list"></div>
+            <p>次は<span id="nextSongNumber">2</span>曲目です！</p>
+            <button onclick="closeSongFinishedModal()">続行</button>
         </div>
     </div>
 
@@ -425,10 +612,15 @@
         let isConnected = false;
         let currentUserId = '';
         let currentRoomId = '';
+        let isPlayer = true;
         let gameInterval = null;
         let pendingRoomJoin = null;
+        let keepAliveInterval = null;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 10;
+        let lastPingTime = 0;
 
-        // 接続
+        // 接続（自動復旧機能付き）
         function connect() {
             const userId = document.getElementById('userId').value.trim();
             if (!userId) {
@@ -448,33 +640,74 @@
                 transports: ['websocket', 'polling'],
                 timeout: 20000,
                 reconnection: true,
-                reconnectionAttempts: 5,
-                reconnectionDelay: 1000
+                reconnectionAttempts: maxReconnectAttempts,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                maxReconnectionAttempts: maxReconnectAttempts,
+                randomizationFactor: 0.5
             });
 
             socket.on('connect', () => {
                 isConnected = true;
+                reconnectAttempts = 0;
                 updateStatus('サーバーに接続済み', 'connected');
                 enableControls(true);
                 refreshRoomList();
+                startKeepAlive();
                 console.log('✅ サーバーに接続しました');
+                
+                if (currentRoomId) {
+                    console.log('🔄 Attempting to rejoin room:', currentRoomId);
+                    showMainMenu();
+                    refreshRoomList();
+                }
             });
 
-            socket.on('disconnect', () => {
+            socket.on('disconnect', (reason) => {
                 isConnected = false;
-                currentRoomId = '';
-                updateStatus('サーバーから切断', 'disconnected');
+                stopKeepAlive();
+                updateStatus(`サーバーから切断: ${reason}`, 'disconnected');
                 enableControls(false);
-                showMainMenu();
-                console.log('❌ サーバーから切断されました');
+                
+                console.log('❌ サーバーから切断されました:', reason);
+                
+                if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+                    showMainMenu();
+                    currentRoomId = '';
+                } else {
+                    attemptReconnect();
+                }
+            });
+
+            socket.on('reconnect', (attemptNumber) => {
+                console.log(`🔄 再接続成功 (${attemptNumber}回目の試行)`);
+                updateStatus('再接続成功', 'connected');
+            });
+
+            socket.on('reconnect_attempt', (attemptNumber) => {
+                console.log(`🔄 再接続試行中... (${attemptNumber}/${maxReconnectAttempts})`);
+                updateStatus(`再接続試行中... (${attemptNumber}/${maxReconnectAttempts})`, 'disconnected');
+            });
+
+            socket.on('reconnect_error', (error) => {
+                console.error('再接続エラー:', error);
+                updateStatus('再接続失敗', 'disconnected');
+            });
+
+            socket.on('reconnect_failed', () => {
+                console.error('再接続に失敗しました');
+                updateStatus('再接続失敗 - 手動で接続してください', 'disconnected');
+                showReconnectButton();
             });
 
             // 部屋作成成功
             socket.on('room_created', (data) => {
                 currentRoomId = data.roomId;
+                isPlayer = true; // 作成者は常にプレイヤー
                 updateStatus(`部屋作成: ${data.roomName}`, 'in-room');
                 document.getElementById('currentRoomName').textContent = data.roomName;
-                document.getElementById('currentSongName').textContent = getSongName(data.songHash);
+                document.getElementById('currentSongNumber').textContent = data.currentSong || 1;
+                updatePlayerStatusDisplay();
                 showGameArea();
                 console.log('🏠 部屋が作成されました:', data);
             });
@@ -482,16 +715,43 @@
             // 部屋参加成功
             socket.on('room_joined', (data) => {
                 currentRoomId = data.roomId;
-                updateStatus(`部屋参加: ${data.roomName}`, 'in-room');
+                updateStatus(`部屋参加: ${data.roomName}`, isPlayer ? 'in-room' : 'spectator');
                 document.getElementById('currentRoomName').textContent = data.roomName;
-                document.getElementById('currentSongName').textContent = getSongName(data.songHash);
+                document.getElementById('currentSongNumber').textContent = data.currentSong || 1;
+                updatePlayerStatusDisplay();
                 showGameArea();
+                
+                // 履歴とポイント表示
+                if (data.songHistory && data.songHistory.length > 0) {
+                    updateSongHistory(data.songHistory);
+                }
+                if (data.playerPoints) {
+                    updatePointsTable(data.playerPoints);
+                }
+                
                 console.log('✅ 部屋に参加しました:', data);
+            });
+
+            // プレイヤー状態切り替え成功
+            socket.on('status_toggled', (data) => {
+                isPlayer = data.isPlayer;
+                updatePlayerStatusDisplay();
+                updateStatus(data.message, isPlayer ? 'in-room' : 'spectator');
+                
+                if (!isPlayer) {
+                    // 観戦者になったらスコア関連を非表示
+                    document.getElementById('scoreControls').style.display = 'none';
+                    document.getElementById('currentScore').textContent = '観戦中';
+                } else {
+                    document.getElementById('scoreControls').style.display = 'block';
+                    document.getElementById('currentScore').textContent = '0';
+                }
             });
 
             // 部屋を出た
             socket.on('left_room', () => {
                 currentRoomId = '';
+                isPlayer = true;
                 updateStatus('サーバーに接続済み', 'connected');
                 showMainMenu();
                 refreshRoomList();
@@ -509,7 +769,15 @@
 
             // ゲーム状態更新
             socket.on('room_update', (data) => {
-                updateLeaderboard(data);
+                updateGameDisplay(data);
+            });
+
+            // 曲終了
+            socket.on('song_finished', (data) => {
+                showSongFinishedModal(data);
+                updateSongHistory([data]);
+                updatePointsTable(data.totalPoints);
+                document.getElementById('currentSongNumber').textContent = data.nextSong;
             });
 
             // エラーハンドリング
@@ -526,9 +794,96 @@
             });
         }
 
+        // Keep-alive機能
+        function startKeepAlive() {
+            stopKeepAlive();
+            
+            keepAliveInterval = setInterval(() => {
+                if (socket && isConnected) {
+                    const now = Date.now();
+                    socket.emit('ping');
+                    lastPingTime = now;
+                    
+                    fetch('/wakeup')
+                        .then(() => console.log('📡 Wake-up ping sent'))
+                        .catch(() => console.log('⚠️ Wake-up ping failed'));
+                } else if (!isConnected && currentUserId) {
+                    attemptReconnect();
+                }
+            }, 13 * 60 * 1000);
+            
+            console.log('🔄 Keep-alive started');
+        }
+
+        function stopKeepAlive() {
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+                keepAliveInterval = null;
+                console.log('⏹️ Keep-alive stopped');
+            }
+        }
+
+        function attemptReconnect() {
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                console.log('🚫 最大再接続回数に達しました');
+                showReconnectButton();
+                return;
+            }
+
+            reconnectAttempts++;
+            console.log(`🔄 自動再接続試行 ${reconnectAttempts}/${maxReconnectAttempts}`);
+            
+            setTimeout(() => {
+                if (!isConnected && currentUserId) {
+                    connect();
+                }
+            }, Math.min(1000 * Math.pow(2, reconnectAttempts), 30000));
+        }
+
+        function showReconnectButton() {
+            const status = document.getElementById('status');
+            status.innerHTML = `
+                切断中 - 
+                <button onclick="manualReconnect()" style="padding:5px 10px; background:#4CAF50; color:white; border:none; border-radius:3px; cursor:pointer;">
+                    再接続
+                </button>
+            `;
+        }
+
+        function manualReconnect() {
+            reconnectAttempts = 0;
+            connect();
+        }
+
+        function checkServerHealth() {
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('💓 サーバーヘルスチェック:', data);
+                    if (!isConnected && data.status === 'OK') {
+                        console.log('🔄 サーバーは生きているが切断されている - 再接続を試行');
+                        manualReconnect();
+                    }
+                })
+                .catch(error => {
+                    console.log('❌ サーバーヘルスチェック失敗:', error.message);
+                });
+        }
+
+        function handleVisibilityChange() {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ ページが表示されました');
+                if (!isConnected && currentUserId) {
+                    checkServerHealth();
+                }
+            } else {
+                console.log('👁️‍🗨️ ページが非表示になりました');
+            }
+        }
+
         // UI制御
         function enableControls(enabled) {
-            const controls = ['roomName', 'songSelect', 'usePassword', 'roomPassword', 'createRoomBtn', 'refreshRoomsBtn'];
+            const controls = ['roomName', 'usePassword', 'roomPassword', 'createRoomBtn', 'refreshRoomsBtn'];
             controls.forEach(id => {
                 document.getElementById(id).disabled = !enabled;
             });
@@ -546,6 +901,24 @@
             status.className = `status ${className}`;
         }
 
+        function updatePlayerStatusDisplay() {
+            const statusSpan = document.getElementById('playerStatus');
+            const toggleBtn = document.getElementById('togglePlayerBtn');
+            
+            if (isPlayer) {
+                statusSpan.textContent = ' | プレイヤー';
+                toggleBtn.textContent = '観戦者に切り替え';
+                toggleBtn.className = 'btn-secondary btn-small';
+                document.getElementById('scoreControls').style.display = 'block';
+            } else {
+                statusSpan.textContent = ' | 観戦者';
+                toggleBtn.textContent = 'プレイヤーに切り替え';
+                toggleBtn.className = 'btn-small';
+                document.getElementById('scoreControls').style.display = 'none';
+                document.getElementById('currentScore').textContent = '観戦中';
+            }
+        }
+
         function showMainMenu() {
             document.getElementById('mainMenu').classList.remove('hidden');
             document.getElementById('gameArea').classList.add('hidden');
@@ -561,17 +934,11 @@
             if (!isConnected) return;
 
             const roomName = document.getElementById('roomName').value.trim();
-            const songHash = document.getElementById('songSelect').value;
             const usePassword = document.getElementById('usePassword').checked;
             const password = usePassword ? document.getElementById('roomPassword').value.trim() : '';
 
             if (!roomName) {
                 alert('部屋名を入力してください');
-                return;
-            }
-
-            if (roomName.length > 30) {
-                alert('部屋名は30文字以内で入力してください');
                 return;
             }
 
@@ -582,17 +949,16 @@
 
             socket.emit('create_room', {
                 roomName,
-                songHash,
                 password: usePassword ? password : null,
                 userId: currentUserId
             });
         }
 
         // 部屋参加
-        function joinRoom(roomId, roomName, hasPassword) {
+        function joinRoom(roomId, roomName, hasPassword, asPlayer = true) {
             if (!isConnected) return;
 
-            pendingRoomJoin = { roomId, roomName, hasPassword };
+            pendingRoomJoin = { roomId, roomName, hasPassword, asPlayer };
 
             if (hasPassword) {
                 showPasswordModal(roomName);
@@ -600,12 +966,13 @@
                 socket.emit('join_room', {
                     roomId,
                     userId: currentUserId,
-                    password: null
+                    password: null,
+                    isPlayer: asPlayer
                 });
             }
         }
 
-        function joinRoomWithPassword() {
+        function joinRoomWithPassword(asPlayer) {
             if (!pendingRoomJoin) return;
 
             const password = document.getElementById('joinPassword').value.trim();
@@ -617,20 +984,26 @@
             socket.emit('join_room', {
                 roomId: pendingRoomJoin.roomId,
                 userId: currentUserId,
-                password: password
+                password: password,
+                isPlayer: asPlayer
             });
 
             closePasswordModal();
         }
 
-        // 部屋を出る
+        // プレイヤー/観戦者切り替え
+        function togglePlayerStatus() {
+            if (socket && currentRoomId) {
+                socket.emit('toggle_player_status');
+            }
+        }
+
         function leaveRoom() {
             if (socket && currentRoomId) {
                 socket.emit('leave_room');
             }
         }
 
-        // 部屋一覧
         function refreshRoomList() {
             if (socket && isConnected) {
                 socket.emit('get_room_list');
@@ -646,7 +1019,7 @@
             }
 
             roomList.innerHTML = rooms.map(room => {
-                const isFull = room.playerCount >= room.maxPlayers;
+                const isFull = room.totalCount >= room.maxPlayers;
                 const classes = ['room-item'];
                 if (room.hasPassword) classes.push('has-password');
                 if (isFull) classes.push('full');
@@ -658,23 +1031,132 @@
                                 ${room.name}
                                 ${room.hasPassword ? '🔐' : ''}
                             </div>
-                            <div class="room-players">${room.playerCount}/${room.maxPlayers}</div>
+                            <div class="room-stats">
+                                <div class="room-count">👥 ${room.playerCount}人</div>
+                                <div class="room-count">👀 ${room.spectatorCount}人</div>
+                            </div>
                         </div>
                         <div class="room-info">
-                            曲: ${getSongName(room.songHash)} | 作成者: ${room.creator}
+                            ${room.currentSong}曲目進行中 | 完了曲数: ${room.songHistory} | 作成者: ${room.creator}
                         </div>
                         <div class="room-info">
                             作成: ${new Date(room.createdAt).toLocaleString()}
                         </div>
                         <div class="room-actions">
-                            <button onclick="joinRoom('${room.roomId}', '${room.name}', ${room.hasPassword})" 
+                            <button onclick="joinRoom('${room.roomId}', '${room.name}', ${room.hasPassword}, true)" 
                                     ${isFull ? 'disabled' : ''}>
-                                ${isFull ? '満員' : '参加'}
+                                プレイヤーで参加
+                            </button>
+                            <button onclick="joinRoom('${room.roomId}', '${room.name}', ${room.hasPassword}, false)" 
+                                    ${isFull ? 'disabled' : ''} class="btn-secondary">
+                                観戦者で参加
                             </button>
                         </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        // ゲーム表示更新
+        function updateGameDisplay(data) {
+            document.getElementById('currentSongNumber').textContent = data.currentSong;
+            
+            // プレイヤーランキング表示
+            const leaderboard = document.getElementById('leaderboard');
+            
+            if (!data.players || data.players.length === 0) {
+                leaderboard.innerHTML = '<div class="empty-state">プレイヤーがいません</div>';
+            } else {
+                leaderboard.innerHTML = data.players.map(player => {
+                    const isMe = player.userId === currentUserId;
+                    const classes = ['player'];
+                    if (isMe) classes.push('me');
+                    if (player.isCreator) classes.push('creator');
+                    if (player.isPythonClient) classes.push('python');
+                    
+                    const diffText = player.diff === 0 ? '👑' : `-${player.diff.toLocaleString()}`;
+                    
+                    return `
+                        <div class="${classes.join(' ')}">
+                            <div class="rank">${player.rank}位</div>
+                            <div class="name">${player.userId}${isMe ? ' (あなた)' : ''}</div>
+                            <div class="score">${player.score.toLocaleString()}</div>
+                            <div class="diff">${diffText}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            // 観戦者表示
+            const spectatorSection = document.getElementById('spectatorSection');
+            const spectatorList = document.getElementById('spectatorList');
+            
+            if (data.spectators && data.spectators.length > 0) {
+                spectatorSection.classList.remove('hidden');
+                spectatorList.innerHTML = data.spectators.map(spectator => {
+                    const client_type = spectator.isPythonClient ? "🐍" : "🌐";
+                    const isMe = spectator.userId === currentUserId;
+                    return `
+                        <div class="spectator-item">
+                            ${client_type} ${spectator.userId}${isMe ? ' (あなた)' : ''}
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                spectatorSection.classList.add('hidden');
+            }
+            
+            // ポイント表示更新
+            if (data.totalPoints) {
+                updatePointsTable(data.totalPoints);
+            }
+        }
+
+        function updatePointsTable(pointsData) {
+            const pointsTable = document.getElementById('pointsTable');
+            
+            if (!pointsData || pointsData.length === 0) {
+                pointsTable.innerHTML = '<div class="empty-state">ポイント情報がありません</div>';
+                return;
+            }
+
+            pointsTable.innerHTML = pointsData.map((entry, index) => {
+                const classes = ['point-item'];
+                if (index === 0) classes.push('first');
+                else if (index === 1) classes.push('second');
+                else if (index === 2) classes.push('third');
+                
+                const isMe = entry.userId === currentUserId;
+                
+                return `
+                    <div class="${classes.join(' ')}">
+                        <span>${index + 1}位 ${entry.userId}${isMe ? ' (あなた)' : ''}</span>
+                        <span>${entry.points}pt</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateSongHistory(history) {
+            const songHistory = document.getElementById('songHistory');
+            
+            if (!history || history.length === 0) {
+                songHistory.innerHTML = '<div class="empty-state">まだ曲が終了していません</div>';
+                return;
+            }
+
+            songHistory.innerHTML = history.slice().reverse().map(song => `
+                <div class="history-item">
+                    <div class="history-header">
+                        第${song.songNumber}曲 - ${new Date(song.timestamp).toLocaleTimeString()}
+                    </div>
+                    <div class="history-ranking">
+                        ${song.ranking.map(r => 
+                            `${r.rank}位 ${r.userId}: ${r.score.toLocaleString()}点 (+${r.points}pt)`
+                        ).join(' | ')}
+                    </div>
+                </div>
+            `).join('');
         }
 
         // モーダル制御
@@ -689,48 +1171,67 @@
             pendingRoomJoin = null;
         }
 
+        function showSongFinishedModal(data) {
+            document.getElementById('finishedSongNumber').textContent = data.songNumber;
+            document.getElementById('nextSongNumber').textContent = data.nextSong;
+            
+            // 曲結果表示
+            const songRanking = document.getElementById('songRanking');
+            songRanking.innerHTML = data.ranking.map((entry, index) => {
+                const classes = ['ranking-item'];
+                if (index === 0) classes.push('first');
+                else if (index === 1) classes.push('second');
+                else if (index === 2) classes.push('third');
+                
+                return `
+                    <div class="${classes.join(' ')}">
+                        <span>${entry.rank}位 ${entry.userId}</span>
+                        <span>${entry.score.toLocaleString()}点 (+${entry.points}pt)</span>
+                    </div>
+                `;
+            }).join('');
+            
+            // 累積ポイント表示
+            const totalPointsRanking = document.getElementById('totalPointsRanking');
+            totalPointsRanking.innerHTML = data.totalPoints.slice(0, 5).map((entry, index) => {
+                const classes = ['ranking-item'];
+                if (index === 0) classes.push('first');
+                else if (index === 1) classes.push('second');
+                else if (index === 2) classes.push('third');
+                
+                return `
+                    <div class="${classes.join(' ')}">
+                        <span>${index + 1}位 ${entry.userId}</span>
+                        <span>${entry.points}pt</span>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('songFinishedModal').style.display = 'block';
+        }
+
+        function closeSongFinishedModal() {
+            document.getElementById('songFinishedModal').style.display = 'none';
+        }
+
         // ゲーム機能
         function updateScore(score) {
-            if (!isConnected || !currentRoomId) return;
+            if (!isConnected || !currentRoomId || !isPlayer) return;
             
             document.getElementById('currentScore').textContent = parseInt(score).toLocaleString();
             socket.emit('score_update', parseInt(score));
         }
 
-        function updateLeaderboard(data) {
-            const leaderboard = document.getElementById('leaderboard');
-            
-            if (!data.players || data.players.length === 0) {
-                leaderboard.innerHTML = '<div class="empty-state">プレイヤー情報を受信中...</div>';
-                return;
-            }
-
-            leaderboard.innerHTML = data.players.map(player => {
-                const isMe = player.userId === currentUserId;
-                const classes = ['player'];
-                if (isMe) classes.push('me');
-                if (player.isCreator) classes.push('creator');
-                
-                const diffText = player.diff === 0 ? '👑' : `-${player.diff.toLocaleString()}`;
-                
-                return `
-                    <div class="${classes.join(' ')}">
-                        <div class="rank">${player.rank}位</div>
-                        <div class="name">${player.userId}${isMe ? ' (あなた)' : ''}</div>
-                        <div class="score">${player.score.toLocaleString()}</div>
-                        <div class="diff">${diffText}</div>
-                    </div>
-                `;
-            }).join('');
-        }
-
         function randomScore() {
+            if (!isPlayer) return;
             const randomScore = Math.floor(Math.random() * 2000000);
             document.getElementById('scoreSlider').value = randomScore;
             updateScore(randomScore);
         }
 
         function simulateGame() {
+            if (!isPlayer) return;
+            
             if (gameInterval) {
                 clearInterval(gameInterval);
                 gameInterval = null;
@@ -753,24 +1254,12 @@
             }, 300);
         }
 
-        // ユーティリティ
-        function getSongName(songHash) {
-            const songs = {
-                'song001': 'テスト曲A (Easy)',
-                'song002': 'テスト曲B (Normal)',
-                'song003': 'テスト曲C (Hard)',
-                'song004': 'ボス曲X (Expert)'
-            };
-            return songs[songHash] || songHash;
-        }
-
-        // 初期化
+        // 初期化（自動復旧機能付き）
         window.addEventListener('load', () => {
             const now = new Date();
             const defaultUser = `Player${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}`;
             document.getElementById('userId').value = defaultUser;
             
-            // パスワードチェックボックスの動作
             document.getElementById('usePassword').addEventListener('change', (e) => {
                 const passwordField = document.getElementById('roomPassword');
                 passwordField.style.display = e.target.checked ? 'block' : 'none';
@@ -779,13 +1268,40 @@
                 }
             });
             
-            // モーダルの外側クリックで閉じる
             window.addEventListener('click', (e) => {
-                const modal = document.getElementById('passwordModal');
-                if (e.target === modal) {
+                const passwordModal = document.getElementById('passwordModal');
+                const songModal = document.getElementById('songFinishedModal');
+                if (e.target === passwordModal) {
                     closePasswordModal();
                 }
+                if (e.target === songModal) {
+                    closeSongFinishedModal();
+                }
             });
+
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            setInterval(checkServerHealth, 5 * 60 * 1000);
+
+            window.addEventListener('online', () => {
+                console.log('🌐 ネットワークが復旧しました');
+                if (!isConnected && currentUserId) {
+                    setTimeout(manualReconnect, 1000);
+                }
+            });
+
+            window.addEventListener('offline', () => {
+                console.log('📡 ネットワークが切断されました');
+                updateStatus('ネットワーク切断', 'disconnected');
+            });
+
+            window.addEventListener('beforeunload', () => {
+                stopKeepAlive();
+                if (socket) {
+                    socket.disconnect();
+                }
+            });
+
+            console.log('🚀 音ゲー大会システム初期化完了');
         });
     </script>
 </body>
