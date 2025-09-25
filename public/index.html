@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音ゲースコア共有テスト</title>
+    <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Arial', sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .connected { background: rgba(76,175,80,0.8); }
+        .disconnected { background: rgba(244,67,54,0.8); }
+        
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { 
+            background: #cccccc; 
+            cursor: not-allowed; 
+        }
+        
+        .score-display {
+            font-size: 48px;
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+        
+        .leaderboard {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .player {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .player:last-child { border-bottom: none; }
+        .player.me { 
+            background: rgba(255,193,7,0.3);
+            font-weight: bold;
+        }
+        .rank { font-weight: bold; min-width: 40px; }
+        .name { flex: 1; text-align: center; }
+        .score { font-weight: bold; min-width: 100px; text-align: right; }
+        .diff { color: #ff9800; min-width: 80px; text-align: right; }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .slider-container {
+            margin: 20px 0;
+        }
+        .slider {
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.3);
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 音ゲースコア共有テスト</h1>
+        
+        <div id="status" class="status disconnected">
+            切断中
+        </div>
+
+        <div class="controls">
+            <div>
+                <label>ユーザー名:</label>
+                <input type="text" id="userId" placeholder="あなたの名前" value="Player1">
+            </div>
+            <div>
+                <label>曲:</label>
+                <select id="songSelect">
+                    <option value="song001">テスト曲A</option>
+                    <option value="song002">テスト曲B</option>
+                    <option value="song003">テスト曲C</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="connectBtn" onclick="connect()">接続</button>
+            <button id="joinBtn" onclick="joinRoom()" disabled>部屋に参加</button>
+        </div>
+
+        <div class="score-display">
+            <div>現在のスコア</div>
+            <div id="currentScore">0</div>
+        </div>
+
+        <div class="slider-container">
+            <label>スコア調整 (テスト用):</label>
+            <input type="range" id="scoreSlider" class="slider" 
+                   min="0" max="1000000" value="0" step="1000"
+                   oninput="updateScore(this.value)">
+        </div>
+
+        <div class="controls">
+            <button onclick="simulateGame()">ゲームシミュレーション</button>
+            <button onclick="randomScore()">ランダムスコア</button>
+        </div>
+
+        <div class="leaderboard">
+            <h3>🏆 リーダーボード</h3>
+            <div id="leaderboard">
+                <div class="player">
+                    <div class="rank">-</div>
+                    <div class="name">プレイヤーが参加するのを待っています...</div>
+                    <div class="score">-</div>
+                    <div class="diff">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.3);">
+            <h4>📝 使い方</h4>
+            <ol>
+                <li>ユーザー名を入力して「接続」をクリック</li>
+                <li>曲を選択して「部屋に参加」をクリック</li>
+                <li>スライダーでスコアを調整、またはシミュレーション実行</li>
+                <li>他のプレイヤーとリアルタイムで点差を確認</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let isConnected = false;
+        let currentUserId = '';
+        let gameInterval = null;
+
+        function connect() {
+            const userId = document.getElementById('userId').value.trim();
+            if (!userId) {
+                alert('ユーザー名を入力してください');
+                return;
+            }
+
+            if (userId.length > 20) {
+                alert('ユーザー名は20文字以内で入力してください');
+                return;
+            }
+
+            currentUserId = userId;
+            
+            // サーバーのURLを自動取得（Render対応）
+            const serverUrl = window.location.origin;
+            socket = io(serverUrl, {
+                transports: ['websocket', 'polling'],
+                timeout: 20000,
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
+
+            socket.on('connect', () => {
+                isConnected = true;
+                updateStatus('接続中', 'connected');
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('joinBtn').disabled = false;
+                console.log('✅ サーバーに接続しました');
+            });
+
+            socket.on('disconnect', () => {
+                isConnected = false;
+                updateStatus('切断中', 'disconnected');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('joinBtn').disabled = true;
+                console.log('❌ サーバーから切断されました');
+            });
+
+            socket.on('update', (data) => {
+                updateLeaderboard(data);
+            });
+
+            socket.on('error', (error) => {
+                alert(`エラー: ${error.message}`);
+                console.error('Server error:', error);
+            });
+        }
+
+        function joinRoom() {
+            if (!isConnected || !socket) return;
+
+            const songHash = document.getElementById('songSelect').value;
+            socket.emit('join', {
+                userId: currentUserId,
+                songHash: songHash
+            });
+            
+            console.log(`🎵 部屋に参加: ${songHash}`);
+        }
+
+        function updateScore(score) {
+            if (!isConnected || !socket) return;
+            
+            document.getElementById('currentScore').textContent = parseInt(score).toLocaleString();
+            socket.emit('score', parseInt(score));
+        }
+
+        function updateStatus(text, className) {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.className = `status ${className}`;
+        }
+
+        function updateLeaderboard(data) {
+            const leaderboard = document.getElementById('leaderboard');
+            
+            if (data.players.length === 0) {
+                leaderboard.innerHTML = '<div class="player"><div class="name">プレイヤーが参加するのを待っています...</div></div>';
+                return;
+            }
+
+            leaderboard.innerHTML = data.players.map(player => {
+                const isMe = player.userId === currentUserId;
+                const diffText = player.diff === 0 ? '👑' : `-${player.diff.toLocaleString()}`;
+                
+                return `
+                    <div class="player ${isMe ? 'me' : ''}">
+                        <div class="rank">${player.rank}位</div>
+                        <div class="name">${player.userId} ${isMe ? '(あなた)' : ''}</div>
+                        <div class="score">${player.score.toLocaleString()}</div>
+                        <div class="diff">${diffText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function randomScore() {
+            const randomScore = Math.floor(Math.random() * 1000000);
+            document.getElementById('scoreSlider').value = randomScore;
+            updateScore(randomScore);
+        }
+
+        function simulateGame() {
+            if (gameInterval) {
+                clearInterval(gameInterval);
+                gameInterval = null;
+                return;
+            }
+
+            let score = 0;
+            const increment = Math.floor(Math.random() * 5000) + 1000;
+            
+            gameInterval = setInterval(() => {
+                score += increment + Math.floor(Math.random() * 2000);
+                if (score > 1000000) {
+                    clearInterval(gameInterval);
+                    gameInterval = null;
+                    return;
+                }
+                
+                document.getElementById('scoreSlider').value = score;
+                updateScore(score);
+            }, 200);
+        }
+
+        // 自動接続（テスト用）
+        window.addEventListener('load', () => {
+            // デフォルトユーザー名を時刻ベースで生成
+            const now = new Date();
+            const defaultUser = `Player${now.getHours()}${now.getMinutes()}`;
+            document.getElementById('userId').value = defaultUser;
+        });
+    </script>
+</body>
+</html>
