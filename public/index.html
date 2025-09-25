@@ -3,60 +3,198 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音ゲースコア共有テスト</title>
+    <title>🎵 音ゲー部屋システム</title>
     <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
     <style>
+        * { box-sizing: border-box; }
         body { 
             font-family: 'Arial', sans-serif; 
-            max-width: 800px; 
-            margin: 0 auto; 
+            margin: 0;
             padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             min-height: 100vh;
         }
+        
         .container {
+            max-width: 1200px;
+            margin: 0 auto;
             background: rgba(255,255,255,0.1);
-            padding: 20px;
-            border-radius: 10px;
+            border-radius: 15px;
             backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
         }
+        
+        .header {
+            padding: 20px 30px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        .section {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .section h3 {
+            margin-top: 0;
+            color: #FFD700;
+            text-align: center;
+        }
+        
         .status {
-            padding: 10px;
+            padding: 12px;
             margin: 10px 0;
-            border-radius: 5px;
+            border-radius: 8px;
             text-align: center;
             font-weight: bold;
+            transition: all 0.3s;
         }
         .connected { background: rgba(76,175,80,0.8); }
         .disconnected { background: rgba(244,67,54,0.8); }
+        .in-room { background: rgba(255,193,7,0.8); color: #333; }
         
-        input, button {
-            padding: 10px;
-            margin: 5px;
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             font-size: 16px;
+            background: rgba(255,255,255,0.9);
+            color: #333;
         }
+        
         button {
-            background: #4CAF50;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
             color: white;
             cursor: pointer;
             transition: all 0.3s;
+            font-weight: bold;
         }
-        button:hover { background: #45a049; }
+        button:hover:not(:disabled) { 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(76,175,80,0.4);
+        }
         button:disabled { 
-            background: #cccccc; 
-            cursor: not-allowed; 
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(45deg, #f44336, #d32f2f);
+        }
+        .btn-danger:hover:not(:disabled) {
+            box-shadow: 0 4px 15px rgba(244,67,54,0.4);
+        }
+        
+        .form-group {
+            margin: 15px 0;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #FFD700;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+        
+        .room-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+        }
+        
+        .room-item {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+            transition: all 0.3s;
+        }
+        .room-item:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateX(5px);
+        }
+        .room-item.has-password {
+            border-left-color: #FF9800;
+        }
+        .room-item.full {
+            border-left-color: #f44336;
+            opacity: 0.7;
+        }
+        
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .room-name {
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .room-players {
+            background: rgba(255,255,255,0.3);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+        
+        .room-info {
+            font-size: 14px;
+            color: #ddd;
+            margin: 5px 0;
+        }
+        
+        .room-actions {
+            margin-top: 10px;
+        }
+        .room-actions button {
+            width: auto;
+            padding: 8px 16px;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+        
+        .game-area {
+            grid-column: 1 / -1;
+            text-align: center;
         }
         
         .score-display {
             font-size: 48px;
-            text-align: center;
-            margin: 20px 0;
-            padding: 20px;
+            padding: 30px;
             background: rgba(0,0,0,0.3);
-            border-radius: 10px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        .score-number {
+            font-weight: bold;
+            color: #FFD700;
         }
         
         .leaderboard {
@@ -67,7 +205,8 @@
         .player {
             display: flex;
             justify-content: space-between;
-            padding: 10px 20px;
+            align-items: center;
+            padding: 15px 20px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         .player:last-child { border-bottom: none; }
@@ -75,16 +214,34 @@
             background: rgba(255,193,7,0.3);
             font-weight: bold;
         }
-        .rank { font-weight: bold; min-width: 40px; }
-        .name { flex: 1; text-align: center; }
-        .score { font-weight: bold; min-width: 100px; text-align: right; }
-        .diff { color: #ff9800; min-width: 80px; text-align: right; }
+        .player.creator {
+            background: rgba(76,175,80,0.2);
+            border-left: 4px solid #4CAF50;
+        }
+        .player.creator .name::after {
+            content: " 👑";
+        }
         
-        .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin: 20px 0;
+        .rank { 
+            font-weight: bold; 
+            min-width: 50px;
+            font-size: 18px;
+        }
+        .name { 
+            flex: 1; 
+            text-align: left;
+            margin-left: 20px;
+        }
+        .score { 
+            font-weight: bold; 
+            min-width: 100px; 
+            text-align: right;
+        }
+        .diff { 
+            color: #ff9800; 
+            min-width: 80px; 
+            text-align: right;
+            font-size: 14px;
         }
         
         .slider-container {
@@ -92,78 +249,174 @@
         }
         .slider {
             width: 100%;
-            height: 10px;
+            height: 8px;
             border-radius: 5px;
             background: rgba(255,255,255,0.3);
             outline: none;
+            -webkit-appearance: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover { color: white; }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+        }
+        
+        .hidden { display: none; }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #ccc;
+            font-style: italic;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎵 音ゲースコア共有テスト</h1>
-        
-        <div id="status" class="status disconnected">
-            切断中
+        <div class="header">
+            <h1>🎵 音ゲー対戦ルーム</h1>
+            <div id="status" class="status disconnected">切断中</div>
         </div>
 
-        <div class="controls">
-            <div>
-                <label>ユーザー名:</label>
-                <input type="text" id="userId" placeholder="あなたの名前" value="Player1">
+        <!-- メインメニュー -->
+        <div id="mainMenu" class="main-content">
+            <!-- 接続セクション -->
+            <div class="section">
+                <h3>🔌 接続設定</h3>
+                <div class="form-group">
+                    <label>ユーザー名:</label>
+                    <input type="text" id="userId" placeholder="あなたの名前を入力" maxlength="20">
+                </div>
+                <button id="connectBtn" onclick="connect()">サーバーに接続</button>
             </div>
-            <div>
-                <label>曲:</label>
-                <select id="songSelect">
-                    <option value="song001">テスト曲A</option>
-                    <option value="song002">テスト曲B</option>
-                    <option value="song003">テスト曲C</option>
-                </select>
+
+            <!-- 部屋作成セクション -->
+            <div class="section">
+                <h3>🏠 部屋作成</h3>
+                <div class="form-group">
+                    <label>部屋名:</label>
+                    <input type="text" id="roomName" placeholder="部屋の名前" maxlength="30" disabled>
+                </div>
+                <div class="form-group">
+                    <label>曲:</label>
+                    <select id="songSelect" disabled>
+                        <option value="song001">テスト曲A (Easy)</option>
+                        <option value="song002">テスト曲B (Normal)</option>
+                        <option value="song003">テスト曲C (Hard)</option>
+                        <option value="song004">ボス曲X (Expert)</option>
+                    </select>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="usePassword" disabled>
+                    <label for="usePassword">パスワードを設定</label>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="roomPassword" placeholder="パスワード（オプション）" maxlength="20" disabled>
+                </div>
+                <button id="createRoomBtn" onclick="createRoom()" disabled>部屋を作成</button>
             </div>
-        </div>
 
-        <div class="controls">
-            <button id="connectBtn" onclick="connect()">接続</button>
-            <button id="joinBtn" onclick="joinRoom()" disabled>部屋に参加</button>
-        </div>
-
-        <div class="score-display">
-            <div>現在のスコア</div>
-            <div id="currentScore">0</div>
-        </div>
-
-        <div class="slider-container">
-            <label>スコア調整 (テスト用):</label>
-            <input type="range" id="scoreSlider" class="slider" 
-                   min="0" max="1000000" value="0" step="1000"
-                   oninput="updateScore(this.value)">
-        </div>
-
-        <div class="controls">
-            <button onclick="simulateGame()">ゲームシミュレーション</button>
-            <button onclick="randomScore()">ランダムスコア</button>
-        </div>
-
-        <div class="leaderboard">
-            <h3>🏆 リーダーボード</h3>
-            <div id="leaderboard">
-                <div class="player">
-                    <div class="rank">-</div>
-                    <div class="name">プレイヤーが参加するのを待っています...</div>
-                    <div class="score">-</div>
-                    <div class="diff">-</div>
+            <!-- 部屋一覧セクション -->
+            <div class="section" style="grid-column: 1 / -1;">
+                <h3>🏠 部屋一覧</h3>
+                <button id="refreshRoomsBtn" onclick="refreshRoomList()" disabled>🔄 更新</button>
+                <div id="roomList" class="room-list">
+                    <div class="empty-state">
+                        サーバーに接続すると部屋一覧が表示されます
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.3);">
-            <h4>📝 使い方</h4>
-            <ol>
-                <li>ユーザー名を入力して「接続」をクリック</li>
-                <li>曲を選択して「部屋に参加」をクリック</li>
-                <li>スライダーでスコアを調整、またはシミュレーション実行</li>
-                <li>他のプレイヤーとリアルタイムで点差を確認</li>
-            </ol>
+        <!-- ゲーム画面 -->
+        <div id="gameArea" class="hidden">
+            <div class="section game-area">
+                <div id="roomInfo" class="status in-room">
+                    部屋: <span id="currentRoomName">-</span> | 
+                    曲: <span id="currentSongName">-</span>
+                </div>
+                
+                <button onclick="leaveRoom()" class="btn-danger">部屋を出る</button>
+
+                <div class="score-display">
+                    <div>現在のスコア</div>
+                    <div id="currentScore" class="score-number">0</div>
+                </div>
+
+                <div class="slider-container">
+                    <label>スコア調整 (テスト用):</label>
+                    <input type="range" id="scoreSlider" class="slider" 
+                           min="0" max="2000000" value="0" step="1000"
+                           oninput="updateScore(this.value)">
+                </div>
+
+                <div style="text-align: center; margin: 20px 0;">
+                    <button onclick="simulateGame()">🎮 ゲームシミュレーション</button>
+                    <button onclick="randomScore()">🎲 ランダムスコア</button>
+                </div>
+
+                <div class="leaderboard">
+                    <h3>🏆 リアルタイムランキング</h3>
+                    <div id="leaderboard">
+                        <div class="empty-state">スコア情報を受信中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- パスワード入力モーダル -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closePasswordModal()">&times;</span>
+            <h3>🔐 パスワードが必要です</h3>
+            <p>部屋 "<span id="modalRoomName">-</span>" に参加するにはパスワードを入力してください。</p>
+            <input type="password" id="joinPassword" placeholder="パスワードを入力" maxlength="20">
+            <br><br>
+            <button onclick="joinRoomWithPassword()">参加</button>
+            <button onclick="closePasswordModal()" class="btn-danger">キャンセル</button>
         </div>
     </div>
 
@@ -171,8 +424,11 @@
         let socket = null;
         let isConnected = false;
         let currentUserId = '';
+        let currentRoomId = '';
         let gameInterval = null;
+        let pendingRoomJoin = null;
 
+        // 接続
         function connect() {
             const userId = document.getElementById('userId').value.trim();
             if (!userId) {
@@ -187,7 +443,6 @@
 
             currentUserId = userId;
             
-            // サーバーのURLを自動取得（Render対応）
             const serverUrl = window.location.origin;
             socket = io(serverUrl, {
                 transports: ['websocket', 'polling'],
@@ -199,47 +454,90 @@
 
             socket.on('connect', () => {
                 isConnected = true;
-                updateStatus('接続中', 'connected');
-                document.getElementById('connectBtn').disabled = true;
-                document.getElementById('joinBtn').disabled = false;
+                updateStatus('サーバーに接続済み', 'connected');
+                enableControls(true);
+                refreshRoomList();
                 console.log('✅ サーバーに接続しました');
             });
 
             socket.on('disconnect', () => {
                 isConnected = false;
-                updateStatus('切断中', 'disconnected');
-                document.getElementById('connectBtn').disabled = false;
-                document.getElementById('joinBtn').disabled = true;
+                currentRoomId = '';
+                updateStatus('サーバーから切断', 'disconnected');
+                enableControls(false);
+                showMainMenu();
                 console.log('❌ サーバーから切断されました');
             });
 
-            socket.on('update', (data) => {
+            // 部屋作成成功
+            socket.on('room_created', (data) => {
+                currentRoomId = data.roomId;
+                updateStatus(`部屋作成: ${data.roomName}`, 'in-room');
+                document.getElementById('currentRoomName').textContent = data.roomName;
+                document.getElementById('currentSongName').textContent = getSongName(data.songHash);
+                showGameArea();
+                console.log('🏠 部屋が作成されました:', data);
+            });
+
+            // 部屋参加成功
+            socket.on('room_joined', (data) => {
+                currentRoomId = data.roomId;
+                updateStatus(`部屋参加: ${data.roomName}`, 'in-room');
+                document.getElementById('currentRoomName').textContent = data.roomName;
+                document.getElementById('currentSongName').textContent = getSongName(data.songHash);
+                showGameArea();
+                console.log('✅ 部屋に参加しました:', data);
+            });
+
+            // 部屋を出た
+            socket.on('left_room', () => {
+                currentRoomId = '';
+                updateStatus('サーバーに接続済み', 'connected');
+                showMainMenu();
+                refreshRoomList();
+                console.log('👋 部屋を出ました');
+            });
+
+            // 部屋一覧受信
+            socket.on('room_list', (data) => {
+                updateRoomList(data.rooms);
+            });
+
+            socket.on('room_list_updated', (data) => {
+                updateRoomList(data.rooms);
+            });
+
+            // ゲーム状態更新
+            socket.on('room_update', (data) => {
                 updateLeaderboard(data);
             });
 
+            // エラーハンドリング
             socket.on('error', (error) => {
-                alert(`エラー: ${error.message}`);
                 console.error('Server error:', error);
+                
+                if (error.code === 'PASSWORD_REQUIRED') {
+                    if (pendingRoomJoin) {
+                        showPasswordModal(pendingRoomJoin.roomName);
+                    }
+                } else {
+                    alert(`エラー: ${error.message}`);
+                }
             });
         }
 
-        function joinRoom() {
-            if (!isConnected || !socket) return;
-
-            const songHash = document.getElementById('songSelect').value;
-            socket.emit('join', {
-                userId: currentUserId,
-                songHash: songHash
+        // UI制御
+        function enableControls(enabled) {
+            const controls = ['roomName', 'songSelect', 'usePassword', 'roomPassword', 'createRoomBtn', 'refreshRoomsBtn'];
+            controls.forEach(id => {
+                document.getElementById(id).disabled = !enabled;
             });
-            
-            console.log(`🎵 部屋に参加: ${songHash}`);
-        }
 
-        function updateScore(score) {
-            if (!isConnected || !socket) return;
+            document.getElementById('connectBtn').disabled = enabled;
             
-            document.getElementById('currentScore').textContent = parseInt(score).toLocaleString();
-            socket.emit('score', parseInt(score));
+            const passwordField = document.getElementById('roomPassword');
+            const usePasswordCheck = document.getElementById('usePassword');
+            passwordField.style.display = usePasswordCheck.checked && enabled ? 'block' : 'none';
         }
 
         function updateStatus(text, className) {
@@ -248,22 +546,177 @@
             status.className = `status ${className}`;
         }
 
+        function showMainMenu() {
+            document.getElementById('mainMenu').classList.remove('hidden');
+            document.getElementById('gameArea').classList.add('hidden');
+        }
+
+        function showGameArea() {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('gameArea').classList.remove('hidden');
+        }
+
+        // 部屋作成
+        function createRoom() {
+            if (!isConnected) return;
+
+            const roomName = document.getElementById('roomName').value.trim();
+            const songHash = document.getElementById('songSelect').value;
+            const usePassword = document.getElementById('usePassword').checked;
+            const password = usePassword ? document.getElementById('roomPassword').value.trim() : '';
+
+            if (!roomName) {
+                alert('部屋名を入力してください');
+                return;
+            }
+
+            if (roomName.length > 30) {
+                alert('部屋名は30文字以内で入力してください');
+                return;
+            }
+
+            if (usePassword && !password) {
+                alert('パスワードを入力してください');
+                return;
+            }
+
+            socket.emit('create_room', {
+                roomName,
+                songHash,
+                password: usePassword ? password : null,
+                userId: currentUserId
+            });
+        }
+
+        // 部屋参加
+        function joinRoom(roomId, roomName, hasPassword) {
+            if (!isConnected) return;
+
+            pendingRoomJoin = { roomId, roomName, hasPassword };
+
+            if (hasPassword) {
+                showPasswordModal(roomName);
+            } else {
+                socket.emit('join_room', {
+                    roomId,
+                    userId: currentUserId,
+                    password: null
+                });
+            }
+        }
+
+        function joinRoomWithPassword() {
+            if (!pendingRoomJoin) return;
+
+            const password = document.getElementById('joinPassword').value.trim();
+            if (!password) {
+                alert('パスワードを入力してください');
+                return;
+            }
+
+            socket.emit('join_room', {
+                roomId: pendingRoomJoin.roomId,
+                userId: currentUserId,
+                password: password
+            });
+
+            closePasswordModal();
+        }
+
+        // 部屋を出る
+        function leaveRoom() {
+            if (socket && currentRoomId) {
+                socket.emit('leave_room');
+            }
+        }
+
+        // 部屋一覧
+        function refreshRoomList() {
+            if (socket && isConnected) {
+                socket.emit('get_room_list');
+            }
+        }
+
+        function updateRoomList(rooms) {
+            const roomList = document.getElementById('roomList');
+            
+            if (!rooms || rooms.length === 0) {
+                roomList.innerHTML = '<div class="empty-state">現在利用可能な部屋がありません</div>';
+                return;
+            }
+
+            roomList.innerHTML = rooms.map(room => {
+                const isFull = room.playerCount >= room.maxPlayers;
+                const classes = ['room-item'];
+                if (room.hasPassword) classes.push('has-password');
+                if (isFull) classes.push('full');
+                
+                return `
+                    <div class="${classes.join(' ')}">
+                        <div class="room-header">
+                            <div class="room-name">
+                                ${room.name}
+                                ${room.hasPassword ? '🔐' : ''}
+                            </div>
+                            <div class="room-players">${room.playerCount}/${room.maxPlayers}</div>
+                        </div>
+                        <div class="room-info">
+                            曲: ${getSongName(room.songHash)} | 作成者: ${room.creator}
+                        </div>
+                        <div class="room-info">
+                            作成: ${new Date(room.createdAt).toLocaleString()}
+                        </div>
+                        <div class="room-actions">
+                            <button onclick="joinRoom('${room.roomId}', '${room.name}', ${room.hasPassword})" 
+                                    ${isFull ? 'disabled' : ''}>
+                                ${isFull ? '満員' : '参加'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // モーダル制御
+        function showPasswordModal(roomName) {
+            document.getElementById('modalRoomName').textContent = roomName;
+            document.getElementById('joinPassword').value = '';
+            document.getElementById('passwordModal').style.display = 'block';
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').style.display = 'none';
+            pendingRoomJoin = null;
+        }
+
+        // ゲーム機能
+        function updateScore(score) {
+            if (!isConnected || !currentRoomId) return;
+            
+            document.getElementById('currentScore').textContent = parseInt(score).toLocaleString();
+            socket.emit('score_update', parseInt(score));
+        }
+
         function updateLeaderboard(data) {
             const leaderboard = document.getElementById('leaderboard');
             
-            if (data.players.length === 0) {
-                leaderboard.innerHTML = '<div class="player"><div class="name">プレイヤーが参加するのを待っています...</div></div>';
+            if (!data.players || data.players.length === 0) {
+                leaderboard.innerHTML = '<div class="empty-state">プレイヤー情報を受信中...</div>';
                 return;
             }
 
             leaderboard.innerHTML = data.players.map(player => {
                 const isMe = player.userId === currentUserId;
+                const classes = ['player'];
+                if (isMe) classes.push('me');
+                if (player.isCreator) classes.push('creator');
+                
                 const diffText = player.diff === 0 ? '👑' : `-${player.diff.toLocaleString()}`;
                 
                 return `
-                    <div class="player ${isMe ? 'me' : ''}">
+                    <div class="${classes.join(' ')}">
                         <div class="rank">${player.rank}位</div>
-                        <div class="name">${player.userId} ${isMe ? '(あなた)' : ''}</div>
+                        <div class="name">${player.userId}${isMe ? ' (あなた)' : ''}</div>
                         <div class="score">${player.score.toLocaleString()}</div>
                         <div class="diff">${diffText}</div>
                     </div>
@@ -272,7 +725,7 @@
         }
 
         function randomScore() {
-            const randomScore = Math.floor(Math.random() * 1000000);
+            const randomScore = Math.floor(Math.random() * 2000000);
             document.getElementById('scoreSlider').value = randomScore;
             updateScore(randomScore);
         }
@@ -285,11 +738,11 @@
             }
 
             let score = 0;
-            const increment = Math.floor(Math.random() * 5000) + 1000;
+            const increment = Math.floor(Math.random() * 10000) + 5000;
             
             gameInterval = setInterval(() => {
-                score += increment + Math.floor(Math.random() * 2000);
-                if (score > 1000000) {
+                score += increment + Math.floor(Math.random() * 5000);
+                if (score > 2000000) {
                     clearInterval(gameInterval);
                     gameInterval = null;
                     return;
@@ -297,15 +750,42 @@
                 
                 document.getElementById('scoreSlider').value = score;
                 updateScore(score);
-            }, 200);
+            }, 300);
         }
 
-        // 自動接続（テスト用）
+        // ユーティリティ
+        function getSongName(songHash) {
+            const songs = {
+                'song001': 'テスト曲A (Easy)',
+                'song002': 'テスト曲B (Normal)',
+                'song003': 'テスト曲C (Hard)',
+                'song004': 'ボス曲X (Expert)'
+            };
+            return songs[songHash] || songHash;
+        }
+
+        // 初期化
         window.addEventListener('load', () => {
-            // デフォルトユーザー名を時刻ベースで生成
             const now = new Date();
-            const defaultUser = `Player${now.getHours()}${now.getMinutes()}`;
+            const defaultUser = `Player${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}`;
             document.getElementById('userId').value = defaultUser;
+            
+            // パスワードチェックボックスの動作
+            document.getElementById('usePassword').addEventListener('change', (e) => {
+                const passwordField = document.getElementById('roomPassword');
+                passwordField.style.display = e.target.checked ? 'block' : 'none';
+                if (!e.target.checked) {
+                    passwordField.value = '';
+                }
+            });
+            
+            // モーダルの外側クリックで閉じる
+            window.addEventListener('click', (e) => {
+                const modal = document.getElementById('passwordModal');
+                if (e.target === modal) {
+                    closePasswordModal();
+                }
+            });
         });
     </script>
 </body>
