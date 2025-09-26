@@ -638,9 +638,17 @@
                 if (data.currentSong) {
                     showCurrentSong();
                 }
+                
+                // 自分のロールをボタンに反映
+                const currentMember = data.members.find(m => m.id === currentUser.userId);
+                if (currentMember) {
+                    updateRoleButtons(currentMember.role);
+                    console.log(`Joined room as ${currentMember.role}`);
+                }
             });
 
             socket.on('memberJoined', (member) => {
+                console.log('Member joined:', member);
                 addMemberToList(member);
             });
 
@@ -661,6 +669,7 @@
                 if (data.userId === currentUser.userId) {
                     updateRoleButtons(data.role);
                 }
+                console.log(`Role changed: ${data.username} is now ${data.role}`);
             });
 
             socket.on('scoreUpdated', (data) => {
@@ -920,14 +929,30 @@
             const memberElement = document.getElementById(`member-${userId}`);
             if (memberElement) {
                 const roleBadge = memberElement.querySelector('.role-badge');
-                roleBadge.className = `role-badge role-${role}`;
-                roleBadge.textContent = role === 'player' ? 'プレイヤー' : '観戦者';
+                if (roleBadge) {
+                    roleBadge.className = `role-badge role-${role}`;
+                    roleBadge.textContent = role === 'player' ? 'プレイヤー' : '観戦者';
+                }
+
+                // ボタンも更新
+                const controlButton = memberElement.querySelector('[onclick*="changeMemberRole"]');
+                if (controlButton) {
+                    const newRole = role === 'player' ? 'spectator' : 'player';
+                    controlButton.onclick = () => changeMemberRole(userId, newRole);
+                    controlButton.textContent = '切替';
+                }
             }
         }
 
         function canControlMember(member) {
-            return currentRoom && currentRoom.ownerId === currentUser.userId && 
+            const canControl = currentRoom && currentRoom.ownerId === currentUser.userId && 
                    member.id !== currentUser.userId && member.type === 'api';
+            
+            if (currentRoom && currentRoom.ownerId === currentUser.userId) {
+                console.log(`Control check for ${member.username}: type=${member.type}, canControl=${canControl}`);
+            }
+            
+            return canControl;
         }
 
         function canKickMember(member) {
@@ -936,6 +961,7 @@
         }
 
         function changeMemberRole(targetUserId, newRole) {
+            console.log(`Attempting to change role of user ${targetUserId} to ${newRole}`);
             socket.emit('changeMemberRole', { targetUserId, role: newRole });
         }
 

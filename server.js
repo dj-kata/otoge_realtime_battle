@@ -157,6 +157,8 @@ app.post('/api/rooms', (req, res) => {
     const room = new Room(name, rule, password, userId);
     room.addMember(userId);
     user.roomId = room.id;
+    // API経由のユーザーは初期でプレイヤー、Web経由は観戦者
+    user.role = user.type === 'api' ? 'player' : 'spectator';
     
     rooms.set(room.id, room);
 
@@ -220,7 +222,8 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
 
     room.addMember(userId);
     user.roomId = roomId;
-    user.role = 'spectator'; // 初期は観戦者
+    // API経由のユーザーは初期でプレイヤー、Web経由は観戦者
+    user.role = user.type === 'api' ? 'player' : 'spectator';
 
     // WebSocketクライアントに通知
     io.to(`room_${roomId}`).emit('memberJoined', {
@@ -393,6 +396,8 @@ io.on('connection', (socket) => {
         const room = new Room(data.name, data.rule, data.password, userId);
         room.addMember(userId);
         user.roomId = room.id;
+        // API経由のユーザーは初期でプレイヤー、Web経由は観戦者
+        user.role = user.type === 'api' ? 'player' : 'spectator';
         
         rooms.set(room.id, room);
         socket.join(`room_${room.id}`);
@@ -437,7 +442,8 @@ io.on('connection', (socket) => {
 
         room.addMember(userId);
         user.roomId = data.roomId;
-        user.role = 'spectator';
+        // API経由のユーザーは初期でプレイヤー、Web経由は観戦者
+        user.role = user.type === 'api' ? 'player' : 'spectator';
 
         socket.join(`room_${data.roomId}`);
 
@@ -489,29 +495,38 @@ io.on('connection', (socket) => {
         const user = users.get(userId);
         const targetUser = users.get(data.targetUserId);
 
+        console.log(`Role change request: user=${userId}, target=${data.targetUserId}, newRole=${data.role}`);
+
         if (!user || !user.roomId) {
+            console.log('Error: User not in room');
             socket.emit('error', { message: 'User not in room' });
             return;
         }
 
         const room = rooms.get(user.roomId);
         if (!room || room.ownerId !== userId) {
+            console.log('Error: Permission denied', { roomOwnerId: room?.ownerId, userId });
             socket.emit('error', { message: 'Permission denied' });
             return;
         }
 
         if (!targetUser || targetUser.roomId !== user.roomId) {
+            console.log('Error: Target user not found in room', { targetUser: !!targetUser, targetRoomId: targetUser?.roomId, currentRoomId: user.roomId });
             socket.emit('error', { message: 'Target user not found in room' });
             return;
         }
 
         // API経由のユーザーのみロール変更可能
         if (targetUser.type !== 'api') {
+            console.log('Error: Can only change role of API users', { targetUserType: targetUser.type });
             socket.emit('error', { message: 'Can only change role of API users' });
             return;
         }
 
+        const oldRole = targetUser.role;
         targetUser.role = data.role;
+
+        console.log(`Role changed successfully: ${targetUser.username} from ${oldRole} to ${data.role}`);
 
         io.to(`room_${user.roomId}`).emit('roleChanged', {
             userId: targetUser.id,
