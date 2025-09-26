@@ -16,6 +16,7 @@ const io = socketIo(server, {
 
 app.use(cors());
 app.use(express.json());
+app.use(express.text()); // sendBeacon対応のためtext/plainも受け入れる
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
@@ -24,13 +25,68 @@ const PORT = process.env.PORT || 3000;
 const rooms = new Map();
 const users = new Map();
 
+// ハートビート管理
+const heartbeats = new Map();
+const HEARTBEAT_TIMEOUT = 30000; // 30秒でタイムアウト
+
+// 非アクティブユーザーのクリーンアップ
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, lastHeartbeat] of heartbeats.entries()) {
+    if (now - lastHeartbeat > HEARTBEAT_TIMEOUT) {
+      console.log(`User ${userId} timed out, cleaning up...`);
+      cleanupUser(userId);
+    }
+  }
+}, 10000); // 10秒ごとにチェック
+
+// ユーザークリーンアップ関数
+function cleanupUser(userId) {
+  const user = users.get(userId);
+  if (!user) return;
+
+  if (user.roomId) {
+    const room = rooms.get(user.roomId);
+    if (room) {
+      const newHost = room.removeMember(userId);
+      
+      // 他のメンバーに退室を通知
+      io.to(user.roomId).emit('memberLeft', {
+        members: Array.from(room.members.values()),
+        leftUser: {
+          id: userId,
+          username: user.username
+        }
+      });
+
+      // 権限委譲があった場合は通知
+      if (newHost) {
+        io.to(user.roomId).emit('hostChanged', {
+          newHost: newHost,
+          members: Array.from(room.members.values())
+        });
+      }
+
+      // 部屋が空になったら削除
+      if (room.members.size === 0) {
+        rooms.delete(user.roomId);
+        console.log(`Room ${user.roomId} deleted (timeout cleanup)`);
+      }
+    }
+  }
+
+  users.delete(userId);
+  heartbeats.delete(userId);
+}
+
 // ルームデータ構造
 class Room {
-  constructor(name, rule, password = null) {
+  constructor(name, rule, password = null, hostUserId = null) {
     this.id = uuidv4();
     this.name = name;
     this.rule = rule; // 'normal' or 'ex'
     this.password = password;
+    this.hostUserId = hostUserId; // 部屋主のユーザーID
     this.members = new Map();
     this.currentSong = {
       isActive: false,
@@ -48,23 +104,46 @@ class Room {
       id: userId,
       username: username,
       isPlayer: true,
-      socketId: null
+      socketId: null,
+      isHost: userId === this.hostUserId
     });
-    this.totalPoints.set(userId, 0);
+    // プレイヤーのみポイントを初期化
+    if (this.members.get(userId).isPlayer) {
+      this.totalPoints.set(userId, 0);
+    }
   }
 
   removeMember(userId) {
+    const member = this.members.get(userId);
     this.members.delete(userId);
     this.totalPoints.delete(userId);
     this.currentSong.scores.delete(userId);
     this.currentSong.completedPlayers.delete(userId);
+
+    // 部屋主が退出した場合、権限委譲
+    if (userId === this.hostUserId && this.members.size > 0) {
+      const newHost = Array.from(this.members.values())[0];
+      this.hostUserId = newHost.id;
+      newHost.isHost = true;
+      console.log(`Host changed to: ${newHost.username} (${newHost.id})`);
+      return newHost; // 新しい部屋主を返す
+    }
+    return null;
   }
 
   setMemberRole(userId, isPlayer) {
     const member = this.members.get(userId);
     if (member) {
+      const wasPlayer = member.isPlayer;
       member.isPlayer = isPlayer;
-      if (!isPlayer) {
+      
+      // プレイヤーになった場合、ポイントを初期化
+      if (isPlayer && !wasPlayer) {
+        this.totalPoints.set(userId, 0);
+      }
+      // 観戦者になった場合、ポイントを削除
+      else if (!isPlayer && wasPlayer) {
+        this.totalPoints.delete(userId);
         this.currentSong.scores.delete(userId);
         this.currentSong.completedPlayers.delete(userId);
       }
@@ -200,11 +279,30 @@ app.post('/api/login', (req, res) => {
     loginAt: new Date()
   });
   
+  // ハートビート開始
+  heartbeats.set(userId, Date.now());
+  
   res.json({ 
     userId,
     username: username.trim(),
     message: 'Login successful'
   });
+});
+
+// ハートビート
+app.post('/api/heartbeat', (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  if (!users.has(userId)) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  heartbeats.set(userId, Date.now());
+  res.json({ message: 'Heartbeat updated' });
 });
 
 // 部屋一覧取得
@@ -223,13 +321,18 @@ app.get('/api/rooms', (req, res) => {
 
 // 部屋作成
 app.post('/api/rooms', (req, res) => {
-  const { name, rule, password } = req.body;
+  const { name, rule, password, hostUserId } = req.body;
   
   if (!name || !rule || !['normal', 'ex'].includes(rule)) {
     return res.status(400).json({ error: 'Invalid room parameters' });
   }
 
-  const room = new Room(name, rule, password);
+  // 部屋主が指定されている場合は確認
+  if (hostUserId && !users.has(hostUserId)) {
+    return res.status(404).json({ error: 'Host user not found' });
+  }
+
+  const room = new Room(name, rule, password, hostUserId);
   rooms.set(room.id, room);
   
   res.json({ 
@@ -265,8 +368,20 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
   if (user.roomId) {
     const oldRoom = rooms.get(user.roomId);
     if (oldRoom) {
-      oldRoom.removeMember(userId);
+      const newHost = oldRoom.removeMember(userId);
+      if (newHost) {
+        // 権限委譲された場合は通知
+        io.to(user.roomId).emit('hostChanged', {
+          newHost: newHost,
+          members: Array.from(oldRoom.members.values())
+        });
+      }
     }
+  }
+
+  // 最初に入室したユーザーが部屋主になる
+  if (room.members.size === 0 && !room.hostUserId) {
+    room.hostUserId = userId;
   }
 
   room.addMember(userId, user.username);
@@ -282,7 +397,8 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
     room: {
       id: room.id,
       name: room.name,
-      rule: room.rule
+      rule: room.rule,
+      hostUserId: room.hostUserId
     },
     user: {
       id: userId,
@@ -293,7 +409,19 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
 
 // 退室
 app.post('/api/leave', (req, res) => {
-  const { userId } = req.body;
+  let userId;
+  
+  // sendBeacon対応：Content-Typeがtext/plainの場合はJSONパースする
+  if (typeof req.body === 'string') {
+    try {
+      const parsed = JSON.parse(req.body);
+      userId = parsed.userId;
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid JSON format' });
+    }
+  } else {
+    userId = req.body.userId;
+  }
   
   if (!userId) {
     return res.status(400).json({ error: 'User ID is required' });
@@ -310,7 +438,7 @@ app.post('/api/leave', (req, res) => {
 
   const room = rooms.get(user.roomId);
   if (room) {
-    room.removeMember(userId);
+    const newHost = room.removeMember(userId);
     
     // リアルタイム更新: 他のメンバーに退室を通知
     io.to(user.roomId).emit('memberLeft', {
@@ -320,6 +448,14 @@ app.post('/api/leave', (req, res) => {
         username: user.username
       }
     });
+
+    // 権限委譲があった場合は通知
+    if (newHost) {
+      io.to(user.roomId).emit('hostChanged', {
+        newHost: newHost,
+        members: Array.from(room.members.values())
+      });
+    }
 
     // 部屋が空になったら削除
     if (room.members.size === 0) {
@@ -425,7 +561,8 @@ io.on('connection', (socket) => {
         room: {
           id: room.id,
           name: room.name,
-          rule: room.rule
+          rule: room.rule,
+          hostUserId: room.hostUserId
         },
         members: Array.from(room.members.values()),
         currentRanking: room.getRanking(),
@@ -474,19 +611,76 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 部屋削除（部屋主のみ）
+  socket.on('deleteRoom', ({ userId }) => {
+    const user = users.get(userId);
+    if (!user || !user.roomId) return;
+
+    const room = rooms.get(user.roomId);
+    if (!room || room.hostUserId !== userId) return;
+
+    // 全メンバーに部屋削除を通知
+    io.to(room.id).emit('roomDeleted', {
+      message: `部屋「${room.name}」が削除されました`
+    });
+
+    // 全メンバーの部屋IDをクリア
+    for (const [memberId] of room.members) {
+      const member = users.get(memberId);
+      if (member) {
+        member.roomId = null;
+      }
+    }
+
+    // 部屋を削除
+    rooms.delete(room.id);
+    console.log(`Room ${room.id} deleted by host ${user.username}`);
+  });
+
   // 切断処理
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     
-    // ユーザーを検索してソケットIDをクリア
+    // ソケットIDでユーザーを検索して退室処理
     for (const [userId, user] of users.entries()) {
+      if (!user.roomId) continue;
+      
       const room = rooms.get(user.roomId);
-      if (room) {
-        const member = room.members.get(userId);
-        if (member && member.socketId === socket.id) {
-          member.socketId = null;
-          break;
+      if (!room) continue;
+      
+      const member = room.members.get(userId);
+      if (member && member.socketId === socket.id) {
+        console.log(`User ${user.username} (${userId}) disconnected, removing from room ${user.roomId}`);
+        
+        // 部屋から削除
+        const newHost = room.removeMember(userId);
+        
+        // 他のメンバーに退室を通知
+        socket.to(user.roomId).emit('memberLeft', {
+          members: Array.from(room.members.values()),
+          leftUser: {
+            id: userId,
+            username: user.username
+          }
+        });
+
+        // 権限委譲があった場合は通知
+        if (newHost) {
+          socket.to(user.roomId).emit('hostChanged', {
+            newHost: newHost,
+            members: Array.from(room.members.values())
+          });
         }
+
+        // 部屋が空になったら削除
+        if (room.members.size === 0) {
+          rooms.delete(user.roomId);
+          console.log(`Room ${user.roomId} deleted (empty)`);
+        }
+
+        // ユーザーの部屋情報をクリア
+        user.roomId = null;
+        break;
       }
     }
   });

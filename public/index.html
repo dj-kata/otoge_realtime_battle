@@ -167,11 +167,27 @@
             margin-bottom: 5px;
         }
 
+        .member-item.current-user {
+            background: #e6fffa;
+            border: 2px solid #38b2ac;
+            font-weight: 600;
+        }
+
         .member-role {
             padding: 4px 8px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+        }
+
+        .host-badge {
+            background: #f56565;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
         }
 
         .player {
@@ -280,6 +296,33 @@
             padding: 5px 0;
         }
 
+        .host-controls {
+            background: #fed7d7;
+            border: 2px solid #feb2b2;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .host-controls h3 {
+            color: #c53030;
+            margin-bottom: 10px;
+        }
+
+        .delete-room-btn {
+            background: #e53e3e !important;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .delete-room-btn:hover {
+            background: #c53030 !important;
+        }
+
         @media (max-width: 768px) {
             .game-area {
                 grid-template-columns: 1fr;
@@ -373,8 +416,11 @@
                     <h3>メンバー</h3>
                     <div class="member-list" id="memberList"></div>
                     
-                    <h3>役割切り替え</h3>
-                    <button onclick="toggleRole()" id="roleToggleBtn">観戦者に変更</button>
+                    <h3>観戦者専用</h3>
+                    <p style="color: #718096; font-size: 14px;">
+                        Webクライアントは観戦者として動作します。<br>
+                        スコア送信にはAPIクライアント（Pythonなど）をご利用ください。
+                    </p>
                 </div>
 
                 <div class="panel">
@@ -402,7 +448,8 @@
         let socket = null;
         let currentUser = null;
         let currentRoom = null;
-        let isPlayer = true;
+        let isPlayer = false; // Webクライアントは観戦者専用
+        let heartbeatInterval = null;
 
         // 環境変数チェック
         const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -442,6 +489,37 @@
             socket.on('newMessage', (message) => {
                 addChatMessage(message);
             });
+
+            socket.on('hostChanged', (data) => {
+                updateMemberList(data.members);
+                console.log(`部屋主が変更されました: ${data.newHost.username}`);
+                
+                // 自分が新しい部屋主になった場合の処理
+                if (data.newHost.id === currentUser.id) {
+                    showHostControls();
+                }
+            });
+
+            socket.on('roomDeleted', (data) => {
+                alert(data.message);
+                logout();
+            });
+
+            // 接続状態の監視
+            socket.on('connect', () => {
+                console.log('Socket connected');
+                // 部屋に参加中の場合は再参加
+                if (currentUser && currentUser.id && currentUser.roomId) {
+                    socket.emit('joinRoom', { 
+                        userId: currentUser.id, 
+                        roomId: currentUser.roomId 
+                    });
+                }
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Socket disconnected');
+            });
         }
 
         // ユーザー名設定
@@ -468,6 +546,7 @@
                         username: data.username
                     };
                     initSocket();
+                    startHeartbeat(); // ハートビート開始
                     showMenu();
                 } else {
                     alert(data.error);
@@ -475,6 +554,34 @@
             } catch (error) {
                 console.error('Login error:', error);
                 alert('ログインに失敗しました');
+            }
+        }
+
+        // ハートビート機能
+        function startHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+            }
+            
+            heartbeatInterval = setInterval(async () => {
+                if (currentUser && currentUser.id) {
+                    try {
+                        await fetch('/api/heartbeat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: currentUser.id })
+                        });
+                    } catch (error) {
+                        console.error('Heartbeat failed:', error);
+                    }
+                }
+            }, 20000); // 20秒ごとにハートビート
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
             }
         }
 
@@ -514,7 +621,12 @@
                 const response = await fetch('/api/rooms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, rule, password })
+                    body: JSON.stringify({ 
+                        name, 
+                        rule, 
+                        password,
+                        hostUserId: currentUser.id // 作成者を部屋主に設定
+                    })
                 });
 
                 const data = await response.json();
@@ -632,14 +744,35 @@
             currentRoom = null;
         }
 
+        // ログアウト処理
+        function logout() {
+            stopHeartbeat();
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            currentUser = null;
+            currentRoom = null;
+            showScreen('loginScreen');
+        }
+
         // ゲーム画面更新
         function updateGameScreen(data) {
             document.getElementById('roomTitle').textContent = `${data.room.name} (${data.room.rule === 'normal' ? '通常スコア' : 'EXスコア'})`;
             document.getElementById('rankingTitle').textContent = `現在の順位 (${data.room.rule === 'normal' ? '通常スコア' : 'EXスコア'})`;
             
+            currentRoom = data.room;
+            
             updateMemberList(data.members);
             updateRanking(data.currentRanking, data.room.rule);
             updateTotalPoints(data.totalPoints);
+            
+            // 部屋主コントロールの表示
+            if (data.room.hostUserId === currentUser.id) {
+                showHostControls();
+            } else {
+                hideHostControls();
+            }
             
             // チャットメッセージ表示
             const chatMessages = document.getElementById('chatMessages');
@@ -658,20 +791,43 @@
                 const memberItem = document.createElement('div');
                 memberItem.className = 'member-item';
                 
-                memberItem.innerHTML = `
-                    <span>${member.username}</span>
-                    <span class="member-role ${member.isPlayer ? 'player' : 'spectator'}">
-                        ${member.isPlayer ? 'プレイヤー' : '観戦者'}
-                    </span>
-                `;
+                // 自分のユーザー名をハイライト
+                if (member.id === currentUser.id) {
+                    memberItem.classList.add('current-user');
+                }
                 
+                const memberInfo = document.createElement('div');
+                memberInfo.style.display = 'flex';
+                memberInfo.style.alignItems = 'center';
+                
+                const memberName = document.createElement('span');
+                memberName.textContent = member.username;
+                memberInfo.appendChild(memberName);
+                
+                // 部屋主バッジ
+                if (member.isHost) {
+                    const hostBadge = document.createElement('span');
+                    hostBadge.className = 'host-badge';
+                    hostBadge.textContent = '部屋主';
+                    memberInfo.appendChild(hostBadge);
+                }
+                
+                const roleInfo = document.createElement('div');
+                roleInfo.style.display = 'flex';
+                roleInfo.style.alignItems = 'center';
+                
+                const roleSpan = document.createElement('span');
+                roleSpan.className = `member-role ${member.isPlayer ? 'player' : 'spectator'}`;
+                roleSpan.textContent = member.isPlayer ? 'プレイヤー' : '観戦者';
+                roleInfo.appendChild(roleSpan);
+                
+                memberItem.appendChild(memberInfo);
+                memberItem.appendChild(roleInfo);
                 memberList.appendChild(memberItem);
                 
-                // 自分の役割を確認
+                // 自分の役割を確認（観戦者固定だが表示のため）
                 if (member.id === currentUser.id) {
                     isPlayer = member.isPlayer;
-                    document.getElementById('roleToggleBtn').textContent = 
-                        isPlayer ? '観戦者に変更' : 'プレイヤーに変更';
                 }
             });
         }
@@ -706,10 +862,18 @@
             const pointsList = document.getElementById('totalPointsList');
             pointsList.innerHTML = '';
             
-            // ポイント順でソート
-            totalPoints.sort((a, b) => b.points - a.points);
+            // ポイントがあるユーザー（プレイヤー）のみを表示
+            const playersWithPoints = totalPoints.filter(point => point.points !== undefined);
             
-            totalPoints.forEach(point => {
+            if (playersWithPoints.length === 0) {
+                pointsList.innerHTML = '<div style="text-align: center; color: #718096;">まだポイントはありません</div>';
+                return;
+            }
+            
+            // ポイント順でソート
+            playersWithPoints.sort((a, b) => b.points - a.points);
+            
+            playersWithPoints.forEach(point => {
                 const pointItem = document.createElement('div');
                 pointItem.className = 'points-item';
                 pointItem.innerHTML = `
@@ -720,15 +884,46 @@
             });
         }
 
-        // 役割切り替え
+        // 役割切り替え（観戦者専用なので無効化）
         function toggleRole() {
-            if (!currentUser.id) return;
+            alert('Webクライアントは観戦者専用です');
+        }
+
+        // 部屋主コントロール表示
+        function showHostControls() {
+            let hostControls = document.getElementById('hostControls');
+            if (!hostControls) {
+                hostControls = document.createElement('div');
+                hostControls.id = 'hostControls';
+                hostControls.className = 'host-controls';
+                hostControls.innerHTML = `
+                    <h3>部屋主コントロール</h3>
+                    <button class="delete-room-btn" onclick="deleteRoom()">部屋を削除</button>
+                `;
+                
+                // ゲーム画面の最初に挿入
+                const gameScreen = document.getElementById('gameScreen');
+                const firstPanel = gameScreen.querySelector('.points-display');
+                gameScreen.insertBefore(hostControls, firstPanel);
+            }
+            hostControls.style.display = 'block';
+        }
+
+        // 部屋主コントロール非表示
+        function hideHostControls() {
+            const hostControls = document.getElementById('hostControls');
+            if (hostControls) {
+                hostControls.style.display = 'none';
+            }
+        }
+
+        // 部屋削除
+        function deleteRoom() {
+            if (!currentUser.id || !currentRoom) return;
             
-            isPlayer = !isPlayer;
-            socket.emit('toggleRole', { 
-                userId: currentUser.id, 
-                isPlayer 
-            });
+            if (confirm(`部屋「${currentRoom.name}」を削除しますか？\nこの操作は取り消せません。`)) {
+                socket.emit('deleteRoom', { userId: currentUser.id });
+            }
         }
 
         // テストスコア送信
@@ -819,7 +1014,45 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Score Manager System initialized');
             console.log('Environment:', isProduction ? 'Production' : 'Development');
+            
+            // ブラウザ終了時の処理
+            setupCleanupHandlers();
         });
+
+        // クリーンアップハンドラーの設定
+        function setupCleanupHandlers() {
+            // ブラウザが閉じられる際の処理
+            window.addEventListener('beforeunload', function(e) {
+                if (currentUser && currentUser.id && currentUser.roomId) {
+                    // ハートビート停止
+                    stopHeartbeat();
+                    // 同期的に退室処理を実行
+                    navigator.sendBeacon('/api/leave', 
+                        JSON.stringify({ userId: currentUser.id }));
+                }
+            });
+
+            // タブが非アクティブになった際の処理（モバイル対応）
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'hidden') {
+                    if (currentUser && currentUser.id && currentUser.roomId) {
+                        // バックグラウンドに移行する際も退室処理を行う（モバイル向け）
+                        stopHeartbeat();
+                        navigator.sendBeacon('/api/leave', 
+                            JSON.stringify({ userId: currentUser.id }));
+                    }
+                }
+            });
+
+            // ページリロード時の処理
+            window.addEventListener('pagehide', function(e) {
+                if (currentUser && currentUser.id && currentUser.roomId) {
+                    stopHeartbeat();
+                    navigator.sendBeacon('/api/leave', 
+                        JSON.stringify({ userId: currentUser.id }));
+                }
+            });
+        }
     </script>
 </body>
 </html>
