@@ -89,18 +89,30 @@
             flex: 1;
             text-align: center;
             padding: 20px;
+            min-height: 150px; /* 高さ固定で揺れ防止 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .player-name {
             font-size: 2rem;
             font-weight: bold;
             margin-bottom: 10px;
+            min-height: 2.5rem; /* 高さ固定 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .player-score {
             font-size: 1.5rem;
             color: #667eea;
             margin-bottom: 20px;
+            min-height: 1.8rem; /* 高さ固定 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .player1 { color: #e74c3c; }
@@ -139,6 +151,38 @@
             background: transparent;
         }
 
+        .player-info {
+            flex: 1;
+            text-align: center;
+            padding: 20px;
+            min-height: 150px; /* 高さ固定で揺れ防止 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .player-name {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            min-height: 2.5rem; /* 高さ固定 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: none; /* アニメーション削除で揺れ防止 */
+        }
+
+        .player-score {
+            font-size: 1.5rem;
+            color: #667eea;
+            margin-bottom: 20px;
+            min-height: 1.8rem; /* 高さ固定 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: none; /* アニメーション削除で揺れ防止 */
+        }
+
         .score-bar {
             height: 100%;
             width: 100%;
@@ -146,7 +190,7 @@
             top: 0;
             left: 0;
             background: linear-gradient(to right, #e74c3c 50%, #3498db 50%);
-            transition: all 0.5s ease;
+            transition: background 0.3s ease; /* 背景色のみアニメーション */
             border-radius: 30px;
         }
 
@@ -204,6 +248,11 @@
                 transform: none;
                 width: 100%;
                 margin: 20px 0;
+                height: 120px;
+            }
+
+            .score-bar-wrapper {
+                height: 60px;
             }
 
             .center-line {
@@ -211,10 +260,8 @@
             }
 
             .score-difference {
-                position: static;
-                transform: none;
-                margin: 10px auto 0 auto;
-                display: inline-block;
+                position: absolute;
+                top: 0;
                 font-size: 18px;
                 padding: 8px 16px;
             }
@@ -274,6 +321,7 @@
         // グローバル変数
         let socket;
         let currentRoom = null;
+        let playerOrder = []; // 入室順を記録
 
         // 初期化
         document.addEventListener('DOMContentLoaded', () => {
@@ -340,6 +388,10 @@
         function connectToRoom(roomId) {
             document.getElementById('status').innerHTML = '🔄 部屋に接続中...';
             
+            // プレイヤー順序をリセット
+            playerOrder = [];
+            console.log('Player order reset');
+            
             // 部屋の情報を取得
             fetch(`/api/rooms`)
                 .then(response => response.json())
@@ -374,48 +426,109 @@
 
         function updateDuelMode(rankings) {
             // APIユーザーのみを対象にフィルタ
-            const apiPlayers = rankings.filter(r => r.type === 'api' && r.username !== 'Unknown').slice(0, 2);
+            const apiPlayers = rankings.filter(r => r.type === 'api' && r.username !== 'Unknown');
             
             console.log('Updating duel mode with players:', apiPlayers);
             
-            if (apiPlayers.length < 2) {
+            // 入室順を記録・維持
+            apiPlayers.forEach(player => {
+                if (!playerOrder.find(p => p.userId === player.userId)) {
+                    playerOrder.push({
+                        userId: player.userId,
+                        username: player.username,
+                        joinOrder: playerOrder.length
+                    });
+                    console.log(`Added player to order: ${player.username} (position ${playerOrder.length - 1})`);
+                }
+            });
+
+            // 入室順でソートし、最初の2人を取得
+            const orderedPlayers = apiPlayers
+                .map(player => {
+                    const orderInfo = playerOrder.find(p => p.userId === player.userId);
+                    return {
+                        ...player,
+                        joinOrder: orderInfo ? orderInfo.joinOrder : 999
+                    };
+                })
+                .sort((a, b) => a.joinOrder - b.joinOrder)
+                .slice(0, 2);
+
+            console.log('Ordered players:', orderedPlayers);
+            
+            // DOM要素を取得（一度だけ）
+            const player1NameEl = document.getElementById('player1Name');
+            const player1ScoreEl = document.getElementById('player1Score');
+            const player1TypeEl = document.getElementById('player1Type');
+            const player2NameEl = document.getElementById('player2Name');
+            const player2ScoreEl = document.getElementById('player2Score');
+            const player2TypeEl = document.getElementById('player2Type');
+            const scoreBarEl = document.getElementById('scoreBar');
+            const scoreDifferenceEl = document.getElementById('scoreDifference');
+            
+            if (orderedPlayers.length < 2) {
                 // 2人未満の場合
-                if (apiPlayers.length === 1) {
-                    document.getElementById('player1Name').textContent = apiPlayers[0].username;
-                    document.getElementById('player1Score').textContent = apiPlayers[0].score.toLocaleString();
-                    document.getElementById('player1Type').style.display = 'inline-block';
+                if (orderedPlayers.length === 1) {
+                    const player = orderedPlayers[0];
                     
-                    document.getElementById('player2Name').textContent = '待機中';
-                    document.getElementById('player2Score').textContent = '0';
-                    document.getElementById('player2Type').style.display = 'none';
+                    // Player1の情報を更新（変更があった場合のみ）
+                    if (player1NameEl.textContent !== player.username) {
+                        player1NameEl.textContent = player.username;
+                    }
+                    if (player1ScoreEl.textContent !== player.score.toLocaleString()) {
+                        player1ScoreEl.textContent = player.score.toLocaleString();
+                    }
+                    player1TypeEl.style.display = 'inline-block';
+                    
+                    // Player2を待機中に設定
+                    if (player2NameEl.textContent !== '待機中') {
+                        player2NameEl.textContent = '待機中';
+                        player2ScoreEl.textContent = '0';
+                        player2TypeEl.style.display = 'none';
+                    }
                 } else {
-                    document.getElementById('player1Name').textContent = '待機中';
-                    document.getElementById('player1Score').textContent = '0';
-                    document.getElementById('player1Type').style.display = 'none';
-                    
-                    document.getElementById('player2Name').textContent = '待機中';
-                    document.getElementById('player2Score').textContent = '0';
-                    document.getElementById('player2Type').style.display = 'none';
+                    // 0人の場合
+                    if (player1NameEl.textContent !== '待機中') {
+                        player1NameEl.textContent = '待機中';
+                        player1ScoreEl.textContent = '0';
+                        player1TypeEl.style.display = 'none';
+                    }
+                    if (player2NameEl.textContent !== '待機中') {
+                        player2NameEl.textContent = '待機中';
+                        player2ScoreEl.textContent = '0';
+                        player2TypeEl.style.display = 'none';
+                    }
                 }
 
                 // 中央位置に設定（同点状態）
-                const scoreBar = document.getElementById('scoreBar');
-                scoreBar.style.background = 'linear-gradient(to right, #e74c3c 50%, #3498db 50%)';
-                document.getElementById('scoreDifference').textContent = '0';
+                scoreBarEl.style.background = 'linear-gradient(to right, #e74c3c 50%, #3498db 50%)';
+                scoreDifferenceEl.textContent = '0';
                 return;
             }
 
-            // 2人のプレイヤー情報を設定
-            const player1 = apiPlayers[0];
-            const player2 = apiPlayers[1];
+            // 2人のプレイヤー情報を設定（入室順固定）
+            const player1 = orderedPlayers[0];
+            const player2 = orderedPlayers[1];
             
-            document.getElementById('player1Name').textContent = player1.username;
-            document.getElementById('player1Score').textContent = player1.score.toLocaleString();
-            document.getElementById('player1Type').style.display = 'inline-block';
+            console.log(`Fixed order - Player1: ${player1.username}, Player2: ${player2.username}`);
             
-            document.getElementById('player2Name').textContent = player2.username;
-            document.getElementById('player2Score').textContent = player2.score.toLocaleString();
-            document.getElementById('player2Type').style.display = 'inline-block';
+            // Player1の情報を更新（変更があった場合のみ）
+            if (player1NameEl.textContent !== player1.username) {
+                player1NameEl.textContent = player1.username;
+            }
+            if (player1ScoreEl.textContent !== player1.score.toLocaleString()) {
+                player1ScoreEl.textContent = player1.score.toLocaleString();
+            }
+            player1TypeEl.style.display = 'inline-block';
+            
+            // Player2の情報を更新（変更があった場合のみ）
+            if (player2NameEl.textContent !== player2.username) {
+                player2NameEl.textContent = player2.username;
+            }
+            if (player2ScoreEl.textContent !== player2.score.toLocaleString()) {
+                player2ScoreEl.textContent = player2.score.toLocaleString();
+            }
+            player2TypeEl.style.display = 'inline-block';
 
             // スコア差の計算とバー表示
             const scoreDiff = player1.score - player2.score; // 正の値でplayer1リード、負の値でplayer2リード
@@ -435,8 +548,10 @@
             // diffRatio = -1 (player2最大リード) -> 10%
             const gradientPosition = 50 + (diffRatio * 40); // 10% ～ 90%の範囲
             
-            const scoreBar = document.getElementById('scoreBar');
-            scoreBar.style.background = `linear-gradient(to right, #e74c3c ${gradientPosition}%, #3498db ${gradientPosition}%)`;
+            const newBackground = `linear-gradient(to right, #e74c3c ${gradientPosition}%, #3498db ${gradientPosition}%)`;
+            if (scoreBarEl.style.background !== newBackground) {
+                scoreBarEl.style.background = newBackground;
+            }
             
             // スコア差の表示（常時k単位で表示）
             let diffDisplay;
@@ -447,7 +562,9 @@
             }
             
             console.log(`Formatted diff: ${diffDisplay}`);
-            document.getElementById('scoreDifference').textContent = diffDisplay;
+            if (scoreDifferenceEl.textContent !== diffDisplay) {
+                scoreDifferenceEl.textContent = diffDisplay;
+            }
         }
 
         function formatScore(score) {
@@ -489,12 +606,20 @@
             }, 2000);
         }
 
-        // デバッグ用: Ctrl+Tでテスト開始
+        // デバッグ用: Ctrl+Tでテスト開始、Ctrl+Rでオーダーリセット
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 't') {
                 e.preventDefault();
                 console.log('Starting score difference test...');
                 testScoreDifference();
+            } else if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                console.log('Resetting player order...');
+                playerOrder = [];
+                console.log('Player order reset');
+            } else if (e.ctrlKey && e.key === 'o') {
+                e.preventDefault();
+                console.log('Current player order:', playerOrder);
             }
         });
     </script>
