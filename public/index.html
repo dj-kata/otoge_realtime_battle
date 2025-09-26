@@ -673,8 +673,8 @@
             });
 
             socket.on('scoreUpdated', (data) => {
-                // スコア更新の処理
                 console.log('Score updated:', data);
+                // スコア更新を視覚的に表示（必要に応じて）
             });
 
             socket.on('rankingsUpdated', (rankings) => {
@@ -910,8 +910,14 @@
                 </div>
                 <div>
                     <span class="points">${member.points}pt</span>
-                    ${canControlMember(member) ? `<button onclick="changeMemberRole('${member.id}', '${member.role === 'player' ? 'spectator' : 'player'}')" class="btn btn-small" style="margin-left: 5px;">切替</button>` : ''}
-                    ${canKickMember(member) ? `<button onclick="kickMember('${member.id}')" class="btn btn-danger btn-small" style="margin-left: 5px;">追放</button>` : ''}
+                    ${canControlMember(member) ? `
+                        <button onclick="changeMemberRole('${member.id}', '${member.role === 'player' ? 'spectator' : 'player'}')" 
+                                class="btn btn-small" style="margin-left: 5px;">切替</button>
+                    ` : ''}
+                    ${canKickMember(member) ? `
+                        <button onclick="kickMember('${member.id}')" 
+                                class="btn btn-danger btn-small" style="margin-left: 5px;">追放</button>
+                    ` : ''}
                 </div>
             `;
 
@@ -985,6 +991,8 @@
             const rankingsList = document.getElementById('rankingsList');
             rankingsList.innerHTML = '';
 
+            console.log('Updating rankings:', rankings);
+
             rankings.forEach((ranking, index) => {
                 const div = document.createElement('div');
                 div.className = 'ranking-item';
@@ -992,8 +1000,8 @@
                 div.innerHTML = `
                     <div class="rank rank-${ranking.rank}">#${ranking.rank}</div>
                     <div class="player-info">
-                        <span>${ranking.username || 'Unknown'}</span>
-                        <span class="player-type type-${ranking.type || 'web'}">${(ranking.type || 'web').toUpperCase()}</span>
+                        <span>${ranking.username}</span>
+                        <span class="player-type type-${ranking.type}">${ranking.type.toUpperCase()}</span>
                     </div>
                     <div class="score">${ranking.score.toLocaleString()}</div>
                 `;
@@ -1001,9 +1009,9 @@
                 rankingsList.appendChild(div);
             });
 
-            if (!document.getElementById('currentSongArea').classList.contains('hidden')) {
-                showCurrentSong();
-            }
+            // ランキングエリアを表示
+            document.getElementById('rankingsArea').classList.remove('hidden');
+            document.getElementById('currentSongArea').classList.remove('hidden');
         }
 
         function addSongHistory(rankings) {

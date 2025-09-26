@@ -98,11 +98,16 @@ class Song {
 
     calculateRankings(rule) {
         const players = Array.from(this.scores.entries())
-            .map(([userId, data]) => ({
-                userId,
-                score: rule === 'ex' ? data.ex : data.normal,
-                ...data
-            }))
+            .map(([userId, data]) => {
+                const user = users.get(userId);
+                return {
+                    userId,
+                    username: user ? user.username : 'Unknown',
+                    type: user ? user.type : 'unknown',
+                    score: rule === 'ex' ? data.ex : data.normal,
+                    ...data
+                };
+            })
             .sort((a, b) => b.score - a.score);
 
         this.rankings = players.map((player, index) => ({
@@ -291,6 +296,9 @@ app.post('/api/rooms/:roomId/score', (req, res) => {
 
     room.currentSong.addScore(userId, normalScore, exScore);
 
+    // 現在のランキングを計算
+    const rankings = room.currentSong.calculateRankings(room.rule);
+
     // WebSocketクライアントに通知
     io.to(`room_${roomId}`).emit('scoreUpdated', {
         userId: userId,
@@ -300,9 +308,10 @@ app.post('/api/rooms/:roomId/score', (req, res) => {
         rule: room.rule
     });
 
-    // 現在のランキングを計算して送信
-    const rankings = room.currentSong.calculateRankings(room.rule);
+    // ランキング更新を送信
     io.to(`room_${roomId}`).emit('rankingsUpdated', rankings);
+
+    console.log(`Score submitted by ${user.username}: normal=${normalScore}, ex=${exScore}, rule=${room.rule}`);
 
     res.json({ success: true });
 });
@@ -404,6 +413,8 @@ io.on('connection', (socket) => {
 
         socket.emit('roomCreated', { roomId: room.id });
         io.emit('roomListUpdated');
+        
+        console.log(`Room "${room.name}" created by ${user.username} (${user.type}) as ${user.role}`);
     });
 
     // 部屋入室 (Webクライアント)
@@ -468,6 +479,8 @@ io.on('connection', (socket) => {
             role: user.role,
             points: user.points
         });
+
+        console.log(`${user.username} (${user.type}) joined room ${room.name} as ${user.role}`);
     });
 
     // ロール変更
@@ -541,26 +554,44 @@ io.on('connection', (socket) => {
         const user = users.get(userId);
         const targetUser = users.get(data.targetUserId);
 
+        console.log(`Kick request: owner=${userId}, target=${data.targetUserId}`);
+
         if (!user || !user.roomId) {
+            console.log('Error: User not in room');
             socket.emit('error', { message: 'User not in room' });
             return;
         }
 
         const room = rooms.get(user.roomId);
         if (!room || room.ownerId !== userId) {
+            console.log('Error: Permission denied', { roomOwnerId: room?.ownerId, userId });
             socket.emit('error', { message: 'Permission denied' });
             return;
         }
 
-        if (!targetUser || targetUser.roomId !== user.roomId) {
-            socket.emit('error', { message: 'Target user not found in room' });
+        if (!targetUser) {
+            console.log('Error: Target user not found', { targetUserId: data.targetUserId });
+            socket.emit('error', { message: 'Target user not found' });
             return;
         }
 
+        if (targetUser.roomId !== user.roomId) {
+            console.log('Error: Target user not in same room', { 
+                targetRoomId: targetUser.roomId, 
+                currentRoomId: user.roomId 
+            });
+            socket.emit('error', { message: 'Target user not in same room' });
+            return;
+        }
+
+        console.log(`Kicking ${targetUser.username} from room ${room.name}`);
+
+        // メンバーを部屋から削除
         room.removeMember(data.targetUserId);
         targetUser.roomId = null;
         targetUser.role = 'spectator';
 
+        // 全員に通知
         io.to(`room_${room.id}`).emit('memberKicked', {
             userId: data.targetUserId,
             username: targetUser.username
@@ -572,8 +603,11 @@ io.on('connection', (socket) => {
             if (targetSocket) {
                 targetSocket.leave(`room_${room.id}`);
                 targetSocket.emit('kicked');
+                console.log(`Removed socket connection for kicked user ${targetUser.username}`);
             }
         }
+
+        console.log(`Successfully kicked ${targetUser.username}`);
     });
 
     // ポイントリセット (部屋主のみ)
@@ -618,21 +652,38 @@ io.on('connection', (socket) => {
             return;
         }
 
+        console.log(`Deleting room ${room.name} by ${user.username}`);
+
         // 全メンバーを退出させる
-        room.getMemberList().forEach(member => {
-            member.roomId = null;
-            member.role = 'spectator';
-            if (member.socketId) {
-                const memberSocket = io.sockets.sockets.get(member.socketId);
-                if (memberSocket) {
-                    memberSocket.leave(`room_${room.id}`);
+        const memberIds = Array.from(room.members);
+        memberIds.forEach(memberId => {
+            const member = users.get(memberId);
+            if (member) {
+                member.roomId = null;
+                member.role = 'spectator';
+                
+                // WebSocketがある場合は部屋から退出
+                if (member.socketId) {
+                    const memberSocket = io.sockets.sockets.get(member.socketId);
+                    if (memberSocket) {
+                        memberSocket.leave(`room_${room.id}`);
+                    }
                 }
+                
+                console.log(`Removed member ${member.username} from deleted room`);
             }
         });
 
+        // 部屋削除の通知を送信
         io.to(`room_${room.id}`).emit('roomDeleted');
+        
+        // 部屋を削除
         rooms.delete(room.id);
+        
+        // 部屋一覧の更新を通知
         io.emit('roomListUpdated');
+        
+        console.log(`Room ${room.name} deleted successfully`);
     });
 
     // チャット送信
