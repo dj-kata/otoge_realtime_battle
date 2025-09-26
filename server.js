@@ -185,6 +185,28 @@ class Room {
 
 // REST APIエンドポイント
 
+// システムログイン（ユーザー登録）
+app.post('/api/login', (req, res) => {
+  const { username } = req.body;
+  
+  if (!username || !username.trim()) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  const userId = uuidv4();
+  users.set(userId, { 
+    username: username.trim(), 
+    roomId: null,
+    loginAt: new Date()
+  });
+  
+  res.json({ 
+    userId,
+    username: username.trim(),
+    message: 'Login successful'
+  });
+});
+
 // 部屋一覧取得
 app.get('/api/rooms', (req, res) => {
   const roomList = Array.from(rooms.values()).map(room => ({
@@ -219,10 +241,15 @@ app.post('/api/rooms', (req, res) => {
 // 入室
 app.post('/api/rooms/:roomId/join', (req, res) => {
   const { roomId } = req.params;
-  const { username, password } = req.body;
+  const { userId, password } = req.body;
   
-  if (!username) {
-    return res.status(400).json({ error: 'Username is required' });
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  const user = users.get(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found. Please login first.' });
   }
 
   const room = rooms.get(roomId);
@@ -234,17 +261,27 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
     return res.status(401).json({ error: 'Invalid password' });
   }
 
-  const userId = uuidv4();
-  room.addMember(userId, username);
-  users.set(userId, { username, roomId });
+  // 既に他の部屋にいる場合は退室
+  if (user.roomId) {
+    const oldRoom = rooms.get(user.roomId);
+    if (oldRoom) {
+      oldRoom.removeMember(userId);
+    }
+  }
+
+  room.addMember(userId, user.username);
+  user.roomId = roomId;
 
   res.json({ 
-    userId,
     message: 'Joined room successfully',
     room: {
       id: room.id,
       name: room.name,
       rule: room.rule
+    },
+    user: {
+      id: userId,
+      username: user.username
     }
   });
 });

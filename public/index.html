@@ -440,16 +440,37 @@
         }
 
         // ユーザー名設定
-        function setUsername() {
+        async function setUsername() {
             const username = document.getElementById('username').value.trim();
             if (!username) {
                 alert('ユーザー名を入力してください');
                 return;
             }
             
-            currentUser = { username };
-            initSocket();
-            showMenu();
+            try {
+                // システムログイン
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentUser = {
+                        id: data.userId,
+                        username: data.username
+                    };
+                    initSocket();
+                    showMenu();
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('ログインに失敗しました');
+            }
         }
 
         // 画面切り替え
@@ -560,7 +581,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        username: currentUser.username, 
+                        userId: currentUser.id, 
                         password 
                     })
                 });
@@ -568,9 +589,8 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    currentUser.id = data.userId;
                     currentUser.roomId = roomId;
-                    socket.emit('joinRoom', { userId: data.userId, roomId });
+                    socket.emit('joinRoom', { userId: currentUser.id, roomId });
                     showScreen('gameScreen');
                     
                     // テストコントロールの表示/非表示
