@@ -654,11 +654,12 @@ io.on('connection', (socket) => {
 
         console.log(`Deleting room ${room.name} by ${user.username}`);
 
-        // 全メンバーを退出させる
+        // 全メンバーを退出させる（部屋主を含む）
         const memberIds = Array.from(room.members);
         memberIds.forEach(memberId => {
             const member = users.get(memberId);
             if (member) {
+                // メンバーの状態をリセット
                 member.roomId = null;
                 member.role = 'spectator';
                 
@@ -673,6 +674,9 @@ io.on('connection', (socket) => {
                 console.log(`Removed member ${member.username} from deleted room`);
             }
         });
+
+        // 部屋のメンバーリストをクリア
+        room.members.clear();
 
         // 部屋削除の通知を送信
         io.to(`room_${room.id}`).emit('roomDeleted');
@@ -807,6 +811,25 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 可視化画面のための部屋監視
+    socket.on('watchRoom', (data) => {
+        const room = rooms.get(data.roomId);
+        if (room) {
+            socket.join(`room_${data.roomId}`);
+            
+            socket.emit('roomInfo', {
+                id: room.id,
+                name: room.name,
+                rule: room.rule,
+                memberCount: room.members.size
+            });
+
+            console.log(`Visualizer connected to room ${room.name}`);
+        } else {
+            socket.emit('error', { message: 'Room not found' });
+        }
+    });
+
     // 切断処理
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
@@ -835,6 +858,7 @@ io.on('connection', (socket) => {
 
                         // 部屋が空の場合は削除
                         if (room.members.size === 0) {
+                            console.log(`Deleting empty room: ${room.name}`);
                             rooms.delete(room.id);
                             io.emit('roomDeleted', room.id);
                         }

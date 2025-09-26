@@ -118,9 +118,13 @@
         /* メイン画面 */
         .main-screen {
             display: grid;
-            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-columns: 2fr 1fr;
             gap: 20px;
             align-items: start;
+        }
+
+        .main-screen.in-room {
+            grid-template-columns: 1fr 1fr;
         }
 
         @media (max-width: 1024px) {
@@ -238,21 +242,38 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 10px;
+            padding: 12px;
             background: #f8f9fa;
             border-radius: 8px;
             margin-bottom: 8px;
+            min-height: 60px;
         }
 
         .member-info {
             display: flex;
             align-items: center;
             gap: 8px;
+            flex: 1;
+            min-width: 0; /* flexアイテムがあふれを処理できるように */
+        }
+
+        .member-info span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .member-controls {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-shrink: 0;
         }
 
         .owner-crown {
             color: #ffd700;
             font-weight: bold;
+            flex-shrink: 0;
         }
 
         .role-badge {
@@ -261,6 +282,7 @@
             border-radius: 4px;
             font-size: 10px;
             font-weight: bold;
+            flex-shrink: 0;
         }
 
         .role-player { background: #28a745; color: white; }
@@ -269,6 +291,8 @@
         .points {
             font-weight: 600;
             color: #667eea;
+            margin-right: 8px;
+            flex-shrink: 0;
         }
 
         /* チャット */
@@ -420,7 +444,7 @@
         <!-- メイン画面 -->
         <div id="mainScreen" class="main-screen hidden">
             <!-- 左側: 部屋一覧・作成 -->
-            <div class="sidebar">
+            <div id="lobbyArea" class="sidebar">
                 <div class="card">
                     <h3 class="mb-20">部屋を作成</h3>
                     <div class="input-group">
@@ -495,6 +519,7 @@
                         <div class="flex gap-10 mb-10">
                             <button id="resetPointsBtn" class="btn btn-secondary btn-small">ポイントリセット</button>
                             <button id="deleteRoomBtn" class="btn btn-danger btn-small">部屋削除</button>
+                            <button id="openVisualizerBtn" class="btn btn-small">可視化画面を開く</button>
                         </div>
                     </div>
 
@@ -596,6 +621,7 @@
             // 部屋主機能
             document.getElementById('resetPointsBtn').addEventListener('click', resetPoints);
             document.getElementById('deleteRoomBtn').addEventListener('click', deleteRoom);
+            document.getElementById('openVisualizerBtn').addEventListener('click', openVisualizer);
 
             // チャット
             document.getElementById('sendChatBtn').addEventListener('click', sendMessage);
@@ -814,6 +840,12 @@
             document.getElementById('gameCard').classList.remove('hidden');
             document.getElementById('membersCard').classList.remove('hidden');
             document.getElementById('chatCard').classList.remove('hidden');
+            
+            // ロビーエリアを隠す
+            document.getElementById('lobbyArea').classList.add('hidden');
+            
+            // メイン画面のレイアウトを変更
+            document.getElementById('mainScreen').classList.add('in-room');
 
             // 部屋情報を表示
             document.getElementById('roomTitle').textContent = currentRoom.name;
@@ -833,6 +865,13 @@
             document.getElementById('gameCard').classList.add('hidden');
             document.getElementById('membersCard').classList.add('hidden');
             document.getElementById('chatCard').classList.add('hidden');
+            
+            // ロビーエリアを再表示
+            document.getElementById('lobbyArea').classList.remove('hidden');
+            
+            // メイン画面のレイアウトを元に戻す
+            document.getElementById('mainScreen').classList.remove('in-room');
+            
             currentRoom = null;
         }
 
@@ -908,15 +947,15 @@
                     <span class="player-type type-${member.type}">${member.type.toUpperCase()}</span>
                     <span class="role-badge role-${member.role}">${member.role === 'player' ? 'プレイヤー' : '観戦者'}</span>
                 </div>
-                <div>
+                <div class="member-controls">
                     <span class="points">${member.points}pt</span>
                     ${canControlMember(member) ? `
                         <button onclick="changeMemberRole('${member.id}', '${member.role === 'player' ? 'spectator' : 'player'}')" 
-                                class="btn btn-small" style="margin-left: 5px;">切替</button>
+                                class="btn btn-small">切替</button>
                     ` : ''}
                     ${canKickMember(member) ? `
                         <button onclick="kickMember('${member.id}')" 
-                                class="btn btn-danger btn-small" style="margin-left: 5px;">追放</button>
+                                class="btn btn-danger btn-small">追放</button>
                     ` : ''}
                 </div>
             `;
@@ -1095,6 +1134,13 @@
 
         function finishTestSong() {
             socket.emit('finishTestSong');
+        }
+
+        function openVisualizer() {
+            if (currentRoom) {
+                const url = `/visualizer.html?room=${currentRoom.id}`;
+                window.open(url, '_blank', 'width=1200,height=800');
+            }
         }
     </script>
 </body>
