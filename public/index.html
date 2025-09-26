@@ -3,1341 +3,786 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDVX Realtime Battle β</title>
-    <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
+    <title>スコア管理システム</title>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
-        * { box-sizing: border-box; }
-        body { 
-            font-family: 'Arial', sans-serif; 
+        * {
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
             min-height: 100vh;
+            color: #333;
         }
-        
+
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
-            background: rgba(255,255,255,0.1);
+            padding: 20px;
+        }
+
+        .screen {
+            display: none;
+            background: white;
             border-radius: 15px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 30px;
+            margin-bottom: 20px;
         }
-        
-        .header {
-            padding: 20px 30px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
+
+        .screen.active {
+            display: block;
         }
-        
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            padding: 20px;
-        }
-        
-        .section {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 20px;
-        }
-        
-        .section h3 {
-            margin-top: 0;
-            color: #FFD700;
+
+        h1, h2 {
+            color: #4a5568;
+            margin-bottom: 20px;
             text-align: center;
         }
-        
-        .status {
-            padding: 12px;
-            margin: 10px 0;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: bold;
-            transition: all 0.3s;
+
+        .form-group {
+            margin-bottom: 20px;
         }
-        .connected { background: rgba(76,175,80,0.8); }
-        .disconnected { background: rgba(244,67,54,0.8); }
-        .in-room { background: rgba(255,193,7,0.8); color: #333; }
-        .spectator { background: rgba(156,39,176,0.8); }
-        
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
         input, select, button {
             width: 100%;
             padding: 12px;
-            margin: 5px 0;
-            border: none;
+            border: 2px solid #e2e8f0;
             border-radius: 8px;
             font-size: 16px;
-            background: rgba(255,255,255,0.9);
-            color: #333;
-        }
-        
-        button {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-            color: white;
-            cursor: pointer;
             transition: all 0.3s;
-            font-weight: bold;
         }
-        button:hover:not(:disabled) { 
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(76,175,80,0.4);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
-        button:disabled { 
-            background: #666;
+
+        button:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
         }
-        
-        .btn-danger {
-            background: linear-gradient(45deg, #f44336, #d32f2f);
-        }
-        .btn-danger:hover:not(:disabled) {
-            box-shadow: 0 4px 15px rgba(244,67,54,0.4);
-        }
-        
-        .btn-secondary {
-            background: linear-gradient(45deg, #9C27B0, #7B1FA2);
-        }
-        .btn-secondary:hover:not(:disabled) {
-            box-shadow: 0 4px 15px rgba(156,39,176,0.4);
-        }
-        
-        .btn-small {
-            width: auto;
-            padding: 8px 16px;
-            font-size: 14px;
-            margin: 2px 5px;
-        }
-        
-        .form-group {
-            margin: 15px 0;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #FFD700;
-        }
-        
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .checkbox-group input[type="checkbox"] {
-            width: auto;
-            margin: 0;
-        }
-        
+
         .room-list {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 8px;
-            padding: 10px;
-            background: rgba(0,0,0,0.2);
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
         }
-        
-        .room-item {
-            background: rgba(255,255,255,0.1);
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-            border-left: 4px solid #4CAF50;
+
+        .room-card {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
             transition: all 0.3s;
         }
-        .room-item:hover {
-            background: rgba(255,255,255,0.2);
-            transform: translateX(5px);
+
+        .room-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
-        .room-item.has-password {
-            border-left-color: #FF9800;
-        }
-        .room-item.full {
-            border-left-color: #f44336;
-            opacity: 0.7;
-        }
-        
-        .room-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .room-name {
-            font-weight: bold;
-            font-size: 18px;
-        }
-        .room-stats {
-            display: flex;
-            gap: 10px;
-        }
-        .room-count {
-            background: rgba(255,255,255,0.3);
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-        }
-        
+
         .room-info {
-            font-size: 14px;
-            color: #ddd;
-            margin: 5px 0;
-        }
-        
-        .room-actions {
-            margin-top: 10px;
-            display: flex;
-            gap: 5px;
-        }
-        .room-actions button {
-            width: auto;
-            padding: 8px 16px;
-            font-size: 14px;
-        }
-        
-        .game-area {
-            grid-column: 1 / -1;
-        }
-        
-        .game-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 20px;
-        }
-        
-        .current-game {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-        }
-        
-        .score-display {
-            font-size: 48px;
-            padding: 30px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 15px;
-            margin: 20px 0;
-        }
-        .score-number {
-            font-weight: bold;
-            color: #FFD700;
-        }
-        
-        .control-panel {
-            margin: 20px 0;
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        .leaderboard {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-        }
-        .leaderboard h4 {
-            margin: 0 0 15px 0;
-            padding: 15px;
-            background: rgba(0,0,0,0.3);
-            text-align: center;
-            border-radius: 10px 10px 0 0;
-        }
-        
-        .player {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .player:last-child { border-bottom: none; }
-        .player.me { 
-            background: rgba(255,193,7,0.3);
-            font-weight: bold;
-        }
-        .player.creator {
-            background: rgba(76,175,80,0.2);
-            border-left: 4px solid #4CAF50;
-        }
-        .player.creator .name::after {
-            content: " 👑";
-        }
-        .player.python .name::before {
-            content: "🐍 ";
-        }
-        
-        .rank { 
-            font-weight: bold; 
-            min-width: 40px;
-            font-size: 16px;
-        }
-        .name { 
-            flex: 1; 
-            text-align: left;
-            margin-left: 15px;
-        }
-        .score { 
-            font-weight: bold; 
-            min-width: 90px; 
-            text-align: right;
-            font-size: 14px;
-        }
-        .diff { 
-            color: #ff9800; 
-            min-width: 70px; 
-            text-align: right;
-            font-size: 12px;
-        }
-        
-        .spectator-list {
-            background: rgba(156,39,176,0.2);
-            border-radius: 8px;
-            padding: 10px;
-            margin-top: 10px;
-        }
-        .spectator-list h5 {
-            margin: 0 0 10px 0;
-            color: #E1BEE7;
-        }
-        .spectator-item {
-            padding: 5px 10px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 5px;
-            margin: 5px 0;
-            font-size: 14px;
-        }
-        
-        .points-table {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-        }
-        .points-table h4 {
-            margin: 0 0 15px 0;
-            padding: 15px;
-            background: rgba(255,193,7,0.3);
-            text-align: center;
-            border-radius: 10px 10px 0 0;
-        }
-        
-        .point-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .point-item:last-child { border-bottom: none; }
-        .point-item.first { background: rgba(255,215,0,0.3); }
-        .point-item.second { background: rgba(192,192,192,0.3); }
-        .point-item.third { background: rgba(205,127,50,0.3); }
-        
-        .song-history {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .song-history h4 {
-            margin: 0 0 15px 0;
-            padding: 15px;
-            background: rgba(0,0,0,0.3);
-            text-align: center;
-            border-radius: 10px 10px 0 0;
-        }
-        
-        .history-item {
-            padding: 15px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .history-item:last-child { border-bottom: none; }
-        .history-header {
-            font-weight: bold;
-            color: #FFD700;
             margin-bottom: 10px;
         }
-        .history-ranking {
+
+        .room-name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .room-members {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .room-meta {
+            display: flex;
+            gap: 10px;
             font-size: 14px;
+            color: #718096;
         }
-        
-        .slider-container {
-            margin: 20px 0;
+
+        .game-area {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
         }
-        .slider {
-            width: 100%;
-            height: 8px;
-            border-radius: 5px;
-            background: rgba(255,255,255,0.3);
-            outline: none;
-            -webkit-appearance: none;
+
+        .panel {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 20px;
         }
-        .slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #4CAF50;
-            cursor: pointer;
+
+        .member-list {
+            margin-bottom: 20px;
         }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            backdrop-filter: blur(5px);
-        }
-        .modal-content {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 10% auto;
-            padding: 30px;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .close:hover { color: white; }
-        
-        .song-finished-modal .modal-content {
-            max-width: 500px;
-            text-align: center;
-        }
-        .ranking-list {
-            margin: 20px 0;
-        }
-        .ranking-item {
-            background: rgba(255,255,255,0.1);
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 8px;
+
+        .member-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 5px;
         }
-        .ranking-item.first { background: rgba(255,215,0,0.4); }
-        .ranking-item.second { background: rgba(192,192,192,0.4); }
-        .ranking-item.third { background: rgba(205,127,50,0.4); }
-        
-        @media (max-width: 1200px) {
-            .game-content {
-                grid-template-columns: 1fr;
-            }
+
+        .member-role {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
         }
-        
+
+        .player {
+            background: #48bb78;
+            color: white;
+        }
+
+        .spectator {
+            background: #ed8936;
+            color: white;
+        }
+
+        .ranking-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #e2e8f0;
+        }
+
+        .ranking-item:nth-child(1) { border-left-color: #ffd700; }
+        .ranking-item:nth-child(2) { border-left-color: #c0c0c0; }
+        .ranking-item:nth-child(3) { border-left-color: #cd7f32; }
+
+        .score-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .score-input input {
+            width: auto;
+            flex: 1;
+        }
+
+        .chat-container {
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+            background: white;
+            margin-bottom: 10px;
+        }
+
+        .chat-message {
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            background: #f7fafc;
+            border-radius: 6px;
+        }
+
+        .chat-username {
+            font-weight: 600;
+            color: #667eea;
+            margin-right: 8px;
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+        }
+
+        .chat-input button {
+            width: auto;
+            padding: 12px 20px;
+        }
+
+        .test-controls {
+            background: #fed7d7;
+            border: 2px solid #feb2b2;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .test-controls h3 {
+            color: #c53030;
+            margin-bottom: 10px;
+        }
+
+        .points-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .points-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+        }
+
         @media (max-width: 768px) {
-            .main-content {
+            .game-area {
                 grid-template-columns: 1fr;
             }
+            
             .container {
-                margin: 10px;
-                border-radius: 10px;
+                padding: 10px;
             }
-        }
-        
-        .hidden { display: none; }
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #ccc;
-            font-style: italic;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🎵 音ゲー大会システム</h1>
-            <div id="status" class="status disconnected">切断中</div>
+        <!-- ログイン画面 -->
+        <div id="loginScreen" class="screen active">
+            <h1>スコア管理システム</h1>
+            <div class="form-group">
+                <label for="username">ユーザー名</label>
+                <input type="text" id="username" placeholder="ユーザー名を入力">
+            </div>
+            <button onclick="setUsername()">接続</button>
         </div>
 
-        <!-- メインメニュー -->
-        <div id="mainMenu" class="main-content">
-            <!-- 接続セクション -->
-            <div class="section">
-                <h3>🔌 接続設定</h3>
-                <div class="form-group">
-                    <label>ユーザー名:</label>
-                    <input type="text" id="userId" placeholder="あなたの名前を入力" maxlength="20">
-                </div>
-                <button id="connectBtn" onclick="connect()">サーバーに接続</button>
+        <!-- メニュー画面 -->
+        <div id="menuScreen" class="screen">
+            <h1>メニュー</h1>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <button onclick="showCreateRoom()">部屋を作成</button>
+                <button onclick="showRoomList()">部屋に参加</button>
             </div>
+        </div>
 
-            <!-- 部屋作成セクション -->
-            <div class="section">
-                <h3>🏠 部屋作成</h3>
-                <div class="form-group">
-                    <label>部屋名:</label>
-                    <input type="text" id="roomName" placeholder="部屋の名前" maxlength="30" disabled>
-                </div>
-                <div class="form-group">
-                    <label>スコアルール:</label>
-                    <select id="scoreRule" disabled>
-                        <option value="normal">通常スコア</option>
-                        <option value="ex">EXスコア</option>
-                    </select>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="usePassword" disabled>
-                    <label for="usePassword">パスワードを設定</label>
-                </div>
-                <div class="form-group">
-                    <input type="password" id="roomPassword" placeholder="パスワード（オプション）" maxlength="20" disabled>
-                </div>
-                <button id="createRoomBtn" onclick="createRoom()" disabled>部屋を作成</button>
+        <!-- 部屋作成画面 -->
+        <div id="createRoomScreen" class="screen">
+            <h2>部屋作成</h2>
+            <div class="form-group">
+                <label for="roomName">部屋名</label>
+                <input type="text" id="roomName" placeholder="部屋名を入力">
             </div>
+            <div class="form-group">
+                <label for="roomRule">ルール</label>
+                <select id="roomRule">
+                    <option value="normal">通常スコア</option>
+                    <option value="ex">EXスコア</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="roomPassword">パスワード (任意)</label>
+                <input type="password" id="roomPassword" placeholder="パスワード (空白の場合はパスワードなし)">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button onclick="createRoom()">作成</button>
+                <button onclick="showMenu()">戻る</button>
+            </div>
+        </div>
 
-            <!-- 部屋一覧セクション -->
-            <div class="section" style="grid-column: 1 / -1;">
-                <h3>🏠 部屋一覧</h3>
-                <button id="refreshRoomsBtn" onclick="refreshRoomList()" disabled>🔄 更新</button>
-                <div id="roomList" class="room-list">
-                    <div class="empty-state">
-                        サーバーに接続すると部屋一覧が表示されます
-                    </div>
-                </div>
-            </div>
+        <!-- 部屋一覧画面 -->
+        <div id="roomListScreen" class="screen">
+            <h2>部屋一覧</h2>
+            <button onclick="loadRoomList()" style="margin-bottom: 20px;">更新</button>
+            <div id="roomList" class="room-list"></div>
+            <button onclick="showMenu()" style="margin-top: 20px;">戻る</button>
         </div>
 
         <!-- ゲーム画面 -->
-        <div id="gameArea" class="hidden">
-            <div class="section game-area">
-                <div id="roomInfo" class="status in-room">
-                    部屋: <span id="currentRoomName">-</span> | 
-                    曲: <span id="currentSongNumber">1</span>曲目 |
-                    ルール: <span id="currentScoreRule">通常スコア</span>
-                    <span id="playerStatus"></span>
+        <div id="gameScreen" class="screen">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="roomTitle">部屋名</h2>
+                <button onclick="leaveRoom()" style="width: auto; padding: 8px 16px; background: #e53e3e;">退室</button>
+            </div>
+
+            <!-- テストコントロール (開発環境のみ) -->
+            <div id="testControls" class="test-controls" style="display: none;">
+                <h3>テストデータ送信</h3>
+                <div class="score-input">
+                    <input type="number" id="testNormalScore" placeholder="通常スコア" value="95000">
+                    <input type="number" id="testExScore" placeholder="EXスコア" value="1200">
+                    <button onclick="sendTestScore()" style="width: auto;">スコア送信</button>
+                    <button onclick="finishTestSong()" style="width: auto;">曲終了</button>
                 </div>
-                
-                <div class="control-panel">
-                    <button onclick="leaveRoom()" class="btn-danger btn-small">部屋を出る</button>
-                    <button id="togglePlayerBtn" onclick="togglePlayerStatus()" class="btn-secondary btn-small">観戦者に切り替え</button>
-                </div>
+            </div>
 
-                <div class="game-content">
-                    <!-- 現在のゲーム -->
-                    <div class="current-game">
-                        <h4>🎮 現在のゲーム</h4>
-                        <div class="score-display">
-                            <div>現在のスコア</div>
-                            <div id="currentScore" class="score-number">0</div>
-                            <div style="font-size: 16px; margin-top: 10px;">
-                                <div>通常: <span id="normalScore">0</span></div>
-                                <div>EX: <span id="exScore">0</span></div>
-                            </div>
-                        </div>
+            <!-- 合計ポイント表示 -->
+            <div class="points-display">
+                <h3>合計ポイント</h3>
+                <div id="totalPointsList"></div>
+            </div>
 
-                        <div id="scoreControls">
-                            <div class="slider-container">
-                                <label>スコア調整 (テスト用):</label>
-                                <input type="range" id="scoreSlider" class="slider" 
-                                       min="0" max="2000000" value="0" step="1000"
-                                       oninput="updateScore(this.value)">
-                            </div>
-
-                            <div style="text-align: center;">
-                                <button onclick="simulateGame()" class="btn-small">🎮 ゲームシミュレーション</button>
-                                <button onclick="randomScore()" class="btn-small">🎲 ランダムスコア</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- リアルタイムランキング -->
-                    <div class="leaderboard">
-                        <h4>🏆 現在のランキング</h4>
-                        <div id="leaderboard">
-                            <div class="empty-state">スコア情報を受信中...</div>
-                        </div>
-                        
-                        <div id="spectatorSection" class="spectator-list hidden">
-                            <h5>👀 観戦者</h5>
-                            <div id="spectatorList"></div>
-                        </div>
-                    </div>
-
-                    <!-- 累積ポイント -->
-                    <div class="points-table">
-                        <h4>🏆 累積ポイント</h4>
-                        <div id="pointsTable">
-                            <div class="empty-state">ポイント情報がありません</div>
-                        </div>
-                    </div>
+            <div class="game-area">
+                <div class="panel">
+                    <h3>メンバー</h3>
+                    <div class="member-list" id="memberList"></div>
+                    
+                    <h3>役割切り替え</h3>
+                    <button onclick="toggleRole()" id="roleToggleBtn">観戦者に変更</button>
                 </div>
 
-                <!-- 曲履歴 -->
-                <div class="song-history">
-                    <h4>📜 曲履歴</h4>
-                    <div id="songHistory">
-                        <div class="empty-state">まだ曲が終了していません</div>
+                <div class="panel">
+                    <h3 id="rankingTitle">現在の順位 (通常スコア)</h3>
+                    <div id="currentRanking"></div>
+                </div>
+            </div>
+
+            <!-- チャット -->
+            <div class="panel" style="margin-top: 20px;">
+                <h3>チャット</h3>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input">
+                        <input type="text" id="chatInput" placeholder="メッセージを入力..." onkeypress="handleChatKeyPress(event)">
+                        <button onclick="sendMessage()">送信</button>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- パスワード入力モーダル -->
-    <div id="passwordModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closePasswordModal()">&times;</span>
-            <h3>🔐 パスワードが必要です</h3>
-            <p>部屋 "<span id="modalRoomName">-</span>" に参加するにはパスワードを入力してください。</p>
-            <input type="password" id="joinPassword" placeholder="パスワードを入力" maxlength="20">
-            <br><br>
-            <div class="control-panel">
-                <button onclick="joinRoomWithPassword(true)" class="btn-small">プレイヤーとして参加</button>
-                <button onclick="joinRoomWithPassword(false)" class="btn-secondary btn-small">観戦者として参加</button>
-            </div>
-            <button onclick="closePasswordModal()" class="btn-danger">キャンセル</button>
-        </div>
-    </div>
-
-    <!-- 曲終了モーダル -->
-    <div id="songFinishedModal" class="modal song-finished-modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeSongFinishedModal()">&times;</span>
-            <h3>🏁 <span id="finishedSongNumber">1</span>曲目 結果発表！</h3>
-            <div id="songRanking" class="ranking-list"></div>
-            <h4>🏆 累積ポイントランキング</h4>
-            <div id="totalPointsRanking" class="ranking-list"></div>
-            <p>次は<span id="nextSongNumber">2</span>曲目です！</p>
-            <button onclick="closeSongFinishedModal()">続行</button>
         </div>
     </div>
 
     <script>
+        // グローバル変数
         let socket = null;
-        let isConnected = false;
-        let currentUserId = '';
-        let currentRoomId = '';
+        let currentUser = null;
+        let currentRoom = null;
         let isPlayer = true;
-        let gameInterval = null;
-        let pendingRoomJoin = null;
-        let keepAliveInterval = null;
-        let reconnectAttempts = 0;
-        let maxReconnectAttempts = 10;
-        let lastPingTime = 0;
 
-        // 接続（自動復旧機能付き）
-        function connect() {
-            const userId = document.getElementById('userId').value.trim();
-            if (!userId) {
+        // 環境変数チェック
+        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
+        // Socket.IO初期化
+        function initSocket() {
+            socket = io();
+            
+            // Socket.IOイベントリスナー
+            socket.on('roomState', (data) => {
+                currentRoom = data.room;
+                updateGameScreen(data);
+            });
+
+            socket.on('memberJoined', (data) => {
+                updateMemberList(data.members);
+            });
+
+            socket.on('memberRoleChanged', (data) => {
+                updateMemberList(data.members);
+            });
+
+            socket.on('scoreUpdate', (data) => {
+                updateRanking(data.ranking, data.rule);
+            });
+
+            socket.on('songFinished', (data) => {
+                updateTotalPoints(data.totalPoints);
+                console.log('Song finished:', data.songHistory);
+            });
+
+            socket.on('newMessage', (message) => {
+                addChatMessage(message);
+            });
+        }
+
+        // ユーザー名設定
+        function setUsername() {
+            const username = document.getElementById('username').value.trim();
+            if (!username) {
                 alert('ユーザー名を入力してください');
                 return;
             }
-
-            if (userId.length > 20) {
-                alert('ユーザー名は20文字以内で入力してください');
-                return;
-            }
-
-            currentUserId = userId;
             
-            const serverUrl = window.location.origin;
-            socket = io(serverUrl, {
-                transports: ['websocket', 'polling'],
-                timeout: 20000,
-                reconnection: true,
-                reconnectionAttempts: maxReconnectAttempts,
-                reconnectionDelay: 1000,
-                reconnectionDelayMax: 5000,
-                maxReconnectionAttempts: maxReconnectAttempts,
-                randomizationFactor: 0.5
-            });
-
-            socket.on('connect', () => {
-                isConnected = true;
-                reconnectAttempts = 0;
-                updateStatus('サーバーに接続済み', 'connected');
-                enableControls(true);
-                refreshRoomList();
-                startKeepAlive();
-                console.log('✅ サーバーに接続しました');
-                
-                if (currentRoomId) {
-                    console.log('🔄 Attempting to rejoin room:', currentRoomId);
-                    showMainMenu();
-                    refreshRoomList();
-                }
-            });
-
-            socket.on('disconnect', (reason) => {
-                isConnected = false;
-                stopKeepAlive();
-                updateStatus(`サーバーから切断: ${reason}`, 'disconnected');
-                enableControls(false);
-                
-                console.log('❌ サーバーから切断されました:', reason);
-                
-                if (reason === 'io server disconnect' || reason === 'io client disconnect') {
-                    showMainMenu();
-                    currentRoomId = '';
-                } else {
-                    attemptReconnect();
-                }
-            });
-
-            socket.on('reconnect', (attemptNumber) => {
-                console.log(`🔄 再接続成功 (${attemptNumber}回目の試行)`);
-                updateStatus('再接続成功', 'connected');
-            });
-
-            socket.on('reconnect_attempt', (attemptNumber) => {
-                console.log(`🔄 再接続試行中... (${attemptNumber}/${maxReconnectAttempts})`);
-                updateStatus(`再接続試行中... (${attemptNumber}/${maxReconnectAttempts})`, 'disconnected');
-            });
-
-            socket.on('reconnect_error', (error) => {
-                console.error('再接続エラー:', error);
-                updateStatus('再接続失敗', 'disconnected');
-            });
-
-            socket.on('reconnect_failed', () => {
-                console.error('再接続に失敗しました');
-                updateStatus('再接続失敗 - 手動で接続してください', 'disconnected');
-                showReconnectButton();
-            });
-
-            // 部屋作成成功
-            socket.on('room_created', (data) => {
-                currentRoomId = data.roomId;
-                isPlayer = true; // 作成者は常にプレイヤー
-                updateStatus(`部屋作成: ${data.roomName}`, 'in-room');
-                document.getElementById('currentRoomName').textContent = data.roomName;
-                document.getElementById('currentSongNumber').textContent = data.currentSong || 1;
-                document.getElementById('currentScoreRule').textContent = getScoreRuleText(data.scoreRule);
-                updatePlayerStatusDisplay();
-                showGameArea();
-                console.log('🏠 部屋が作成されました:', data);
-            });
-
-            // 部屋参加成功
-            socket.on('room_joined', (data) => {
-                currentRoomId = data.roomId;
-                updateStatus(`部屋参加: ${data.roomName}`, isPlayer ? 'in-room' : 'spectator');
-                document.getElementById('currentRoomName').textContent = data.roomName;
-                document.getElementById('currentSongNumber').textContent = data.currentSong || 1;
-                document.getElementById('currentScoreRule').textContent = getScoreRuleText(data.scoreRule);
-                updatePlayerStatusDisplay();
-                showGameArea();
-                
-                // 履歴とポイント表示
-                if (data.songHistory && data.songHistory.length > 0) {
-                    updateSongHistory(data.songHistory);
-                }
-                if (data.playerPoints) {
-                    updatePointsTable(data.playerPoints);
-                }
-                
-                console.log('✅ 部屋に参加しました:', data);
-            });
-
-            // プレイヤー状態切り替え成功
-            socket.on('status_toggled', (data) => {
-                isPlayer = data.isPlayer;
-                updatePlayerStatusDisplay();
-                updateStatus(data.message, isPlayer ? 'in-room' : 'spectator');
-                
-                if (!isPlayer) {
-                    // 観戦者になったらスコア関連を非表示
-                    document.getElementById('scoreControls').style.display = 'none';
-                    document.getElementById('currentScore').textContent = '観戦中';
-                } else {
-                    document.getElementById('scoreControls').style.display = 'block';
-                    document.getElementById('currentScore').textContent = '0';
-                }
-            });
-
-            // 部屋を出た
-            socket.on('left_room', () => {
-                currentRoomId = '';
-                isPlayer = true;
-                updateStatus('サーバーに接続済み', 'connected');
-                showMainMenu();
-                refreshRoomList();
-                console.log('👋 部屋を出ました');
-            });
-
-            // 部屋一覧受信
-            socket.on('room_list', (data) => {
-                updateRoomList(data.rooms);
-            });
-
-            socket.on('room_list_updated', (data) => {
-                updateRoomList(data.rooms);
-            });
-
-            // ゲーム状態更新
-            socket.on('room_update', (data) => {
-                updateGameDisplay(data);
-            });
-
-            // 曲終了
-            socket.on('song_finished', (data) => {
-                showSongFinishedModal(data);
-                updateSongHistory([data]);
-                updatePointsTable(data.totalPoints);
-                document.getElementById('currentSongNumber').textContent = data.nextSong;
-            });
-
-            // エラーハンドリング
-            socket.on('error', (error) => {
-                console.error('Server error:', error);
-                
-                if (error.code === 'PASSWORD_REQUIRED') {
-                    if (pendingRoomJoin) {
-                        showPasswordModal(pendingRoomJoin.roomName);
-                    }
-                } else {
-                    alert(`エラー: ${error.message}`);
-                }
-            });
+            currentUser = { username };
+            initSocket();
+            showMenu();
         }
 
-        // Keep-alive機能
-        function startKeepAlive() {
-            stopKeepAlive();
-            
-            keepAliveInterval = setInterval(() => {
-                if (socket && isConnected) {
-                    const now = Date.now();
-                    socket.emit('ping');
-                    lastPingTime = now;
-                    
-                    fetch('/wakeup')
-                        .then(() => console.log('📡 Wake-up ping sent'))
-                        .catch(() => console.log('⚠️ Wake-up ping failed'));
-                } else if (!isConnected && currentUserId) {
-                    attemptReconnect();
-                }
-            }, 13 * 60 * 1000);
-            
-            console.log('🔄 Keep-alive started');
-        }
-
-        function stopKeepAlive() {
-            if (keepAliveInterval) {
-                clearInterval(keepAliveInterval);
-                keepAliveInterval = null;
-                console.log('⏹️ Keep-alive stopped');
-            }
-        }
-
-        function attemptReconnect() {
-            if (reconnectAttempts >= maxReconnectAttempts) {
-                console.log('🚫 最大再接続回数に達しました');
-                showReconnectButton();
-                return;
-            }
-
-            reconnectAttempts++;
-            console.log(`🔄 自動再接続試行 ${reconnectAttempts}/${maxReconnectAttempts}`);
-            
-            setTimeout(() => {
-                if (!isConnected && currentUserId) {
-                    connect();
-                }
-            }, Math.min(1000 * Math.pow(2, reconnectAttempts), 30000));
-        }
-
-        function showReconnectButton() {
-            const status = document.getElementById('status');
-            status.innerHTML = `
-                切断中 - 
-                <button onclick="manualReconnect()" style="padding:5px 10px; background:#4CAF50; color:white; border:none; border-radius:3px; cursor:pointer;">
-                    再接続
-                </button>
-            `;
-        }
-
-        function manualReconnect() {
-            reconnectAttempts = 0;
-            connect();
-        }
-
-        function checkServerHealth() {
-            fetch('/health')
-                .then(response => response.json())
-                .then(data => {
-                    console.log('💓 サーバーヘルスチェック:', data);
-                    if (!isConnected && data.status === 'OK') {
-                        console.log('🔄 サーバーは生きているが切断されている - 再接続を試行');
-                        manualReconnect();
-                    }
-                })
-                .catch(error => {
-                    console.log('❌ サーバーヘルスチェック失敗:', error.message);
-                });
-        }
-
-        function handleVisibilityChange() {
-            if (document.visibilityState === 'visible') {
-                console.log('👁️ ページが表示されました');
-                if (!isConnected && currentUserId) {
-                    checkServerHealth();
-                }
-            } else {
-                console.log('👁️‍🗨️ ページが非表示になりました');
-            }
-        }
-
-        // UI制御
-        function enableControls(enabled) {
-            const controls = ['roomName', 'scoreRule', 'usePassword', 'roomPassword', 'createRoomBtn', 'refreshRoomsBtn'];
-            controls.forEach(id => {
-                document.getElementById(id).disabled = !enabled;
+        // 画面切り替え
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
             });
-
-            document.getElementById('connectBtn').disabled = enabled;
-            
-            const passwordField = document.getElementById('roomPassword');
-            const usePasswordCheck = document.getElementById('usePassword');
-            passwordField.style.display = usePasswordCheck.checked && enabled ? 'block' : 'none';
+            document.getElementById(screenId).classList.add('active');
         }
 
-        function updateStatus(text, className) {
-            const status = document.getElementById('status');
-            status.textContent = text;
-            status.className = `status ${className}`;
+        function showMenu() {
+            showScreen('menuScreen');
         }
 
-        function updatePlayerStatusDisplay() {
-            const statusSpan = document.getElementById('playerStatus');
-            const toggleBtn = document.getElementById('togglePlayerBtn');
-            
-            if (isPlayer) {
-                statusSpan.textContent = ' | プレイヤー';
-                toggleBtn.textContent = '観戦者に切り替え';
-                toggleBtn.className = 'btn-secondary btn-small';
-                document.getElementById('scoreControls').style.display = 'block';
-            } else {
-                statusSpan.textContent = ' | 観戦者';
-                toggleBtn.textContent = 'プレイヤーに切り替え';
-                toggleBtn.className = 'btn-small';
-                document.getElementById('scoreControls').style.display = 'none';
-                document.getElementById('currentScore').textContent = '観戦中';
-            }
+        function showCreateRoom() {
+            showScreen('createRoomScreen');
         }
 
-        function showMainMenu() {
-            document.getElementById('mainMenu').classList.remove('hidden');
-            document.getElementById('gameArea').classList.add('hidden');
-        }
-
-        function showGameArea() {
-            document.getElementById('mainMenu').classList.add('hidden');
-            document.getElementById('gameArea').classList.remove('hidden');
+        function showRoomList() {
+            showScreen('roomListScreen');
+            loadRoomList();
         }
 
         // 部屋作成
-        function createRoom() {
-            if (!isConnected) return;
+        async function createRoom() {
+            const name = document.getElementById('roomName').value.trim();
+            const rule = document.getElementById('roomRule').value;
+            const password = document.getElementById('roomPassword').value.trim() || null;
 
-            const roomName = document.getElementById('roomName').value.trim();
-            const scoreRule = document.getElementById('scoreRule').value;
-            const usePassword = document.getElementById('usePassword').checked;
-            const password = usePassword ? document.getElementById('roomPassword').value.trim() : '';
-
-            if (!roomName) {
+            if (!name) {
                 alert('部屋名を入力してください');
                 return;
             }
 
-            if (usePassword && !password) {
-                alert('パスワードを入力してください');
-                return;
-            }
+            try {
+                const response = await fetch('/api/rooms', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, rule, password })
+                });
 
-            socket.emit('create_room', {
-                roomName,
-                scoreRule,
-                password: usePassword ? password : null,
-                userId: currentUserId
-            });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // 作成した部屋に自動参加
+                    await joinRoom(data.roomId, password);
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Room creation error:', error);
+                alert('部屋の作成に失敗しました');
+            }
+        }
+
+        // 部屋一覧読み込み
+        async function loadRoomList() {
+            try {
+                const response = await fetch('/api/rooms');
+                const data = await response.json();
+                
+                const roomListElement = document.getElementById('roomList');
+                roomListElement.innerHTML = '';
+
+                if (data.rooms.length === 0) {
+                    roomListElement.innerHTML = '<p style="text-align: center; color: #718096;">部屋が存在しません</p>';
+                    return;
+                }
+
+                data.rooms.forEach(room => {
+                    const roomCard = document.createElement('div');
+                    roomCard.className = 'room-card';
+                    roomCard.onclick = () => promptJoinRoom(room);
+                    
+                    roomCard.innerHTML = `
+                        <div class="room-info">
+                            <div class="room-name">${room.name}</div>
+                            <div class="room-members">${room.memberCount}人</div>
+                        </div>
+                        <div class="room-meta">
+                            <span>ルール: ${room.rule === 'normal' ? '通常スコア' : 'EXスコア'}</span>
+                            ${room.hasPassword ? '<span>🔒</span>' : ''}
+                        </div>
+                    `;
+                    
+                    roomListElement.appendChild(roomCard);
+                });
+            } catch (error) {
+                console.error('Room list loading error:', error);
+                alert('部屋一覧の読み込みに失敗しました');
+            }
+        }
+
+        // 部屋参加プロンプト
+        function promptJoinRoom(room) {
+            let password = null;
+            if (room.hasPassword) {
+                password = prompt('パスワードを入力してください:');
+                if (password === null) return;
+            }
+            joinRoom(room.id, password);
         }
 
         // 部屋参加
-        function joinRoom(roomId, roomName, hasPassword, asPlayer = true) {
-            if (!isConnected) return;
-
-            pendingRoomJoin = { roomId, roomName, hasPassword, asPlayer };
-
-            if (hasPassword) {
-                showPasswordModal(roomName);
-            } else {
-                socket.emit('join_room', {
-                    roomId,
-                    userId: currentUserId,
-                    password: null,
-                    isPlayer: asPlayer
+        async function joinRoom(roomId, password) {
+            try {
+                const response = await fetch(`/api/rooms/${roomId}/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        username: currentUser.username, 
+                        password 
+                    })
                 });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentUser.id = data.userId;
+                    currentUser.roomId = roomId;
+                    socket.emit('joinRoom', { userId: data.userId, roomId });
+                    showScreen('gameScreen');
+                    
+                    // テストコントロールの表示/非表示
+                    if (!isProduction) {
+                        document.getElementById('testControls').style.display = 'block';
+                    }
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Room join error:', error);
+                alert('部屋への参加に失敗しました');
             }
         }
 
-        function joinRoomWithPassword(asPlayer) {
-            if (!pendingRoomJoin) return;
-
-            const password = document.getElementById('joinPassword').value.trim();
-            if (!password) {
-                alert('パスワードを入力してください');
-                return;
-            }
-
-            socket.emit('join_room', {
-                roomId: pendingRoomJoin.roomId,
-                userId: currentUserId,
-                password: password,
-                isPlayer: asPlayer
-            });
-
-            closePasswordModal();
-        }
-
-        // プレイヤー/観戦者切り替え
-        function togglePlayerStatus() {
-            if (socket && currentRoomId) {
-                socket.emit('toggle_player_status');
-            }
-        }
-
+        // 部屋退室
         function leaveRoom() {
-            if (socket && currentRoomId) {
-                socket.emit('leave_room');
+            if (confirm('部屋を退室しますか？')) {
+                showMenu();
+                currentUser.id = null;
+                currentUser.roomId = null;
+                currentRoom = null;
             }
         }
 
-        function refreshRoomList() {
-            if (socket && isConnected) {
-                socket.emit('get_room_list');
-            }
-        }
-
-        function updateRoomList(rooms) {
-            const roomList = document.getElementById('roomList');
+        // ゲーム画面更新
+        function updateGameScreen(data) {
+            document.getElementById('roomTitle').textContent = `${data.room.name} (${data.room.rule === 'normal' ? '通常スコア' : 'EXスコア'})`;
+            document.getElementById('rankingTitle').textContent = `現在の順位 (${data.room.rule === 'normal' ? '通常スコア' : 'EXスコア'})`;
             
-            if (!rooms || rooms.length === 0) {
-                roomList.innerHTML = '<div class="empty-state">現在利用可能な部屋がありません</div>';
+            updateMemberList(data.members);
+            updateRanking(data.currentRanking, data.room.rule);
+            updateTotalPoints(data.totalPoints);
+            
+            // チャットメッセージ表示
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+            data.chatMessages.forEach(message => {
+                addChatMessage(message);
+            });
+        }
+
+        // メンバーリスト更新
+        function updateMemberList(members) {
+            const memberList = document.getElementById('memberList');
+            memberList.innerHTML = '';
+            
+            members.forEach(member => {
+                const memberItem = document.createElement('div');
+                memberItem.className = 'member-item';
+                
+                memberItem.innerHTML = `
+                    <span>${member.username}</span>
+                    <span class="member-role ${member.isPlayer ? 'player' : 'spectator'}">
+                        ${member.isPlayer ? 'プレイヤー' : '観戦者'}
+                    </span>
+                `;
+                
+                memberList.appendChild(memberItem);
+                
+                // 自分の役割を確認
+                if (member.id === currentUser.id) {
+                    isPlayer = member.isPlayer;
+                    document.getElementById('roleToggleBtn').textContent = 
+                        isPlayer ? '観戦者に変更' : 'プレイヤーに変更';
+                }
+            });
+        }
+
+        // 順位表示更新
+        function updateRanking(ranking, rule) {
+            const rankingElement = document.getElementById('currentRanking');
+            rankingElement.innerHTML = '';
+            
+            if (ranking.length === 0) {
+                rankingElement.innerHTML = '<p style="text-align: center; color: #718096;">スコアが入力されていません</p>';
                 return;
             }
-
-            roomList.innerHTML = rooms.map(room => {
-                const isFull = room.totalCount >= room.maxPlayers;
-                const classes = ['room-item'];
-                if (room.hasPassword) classes.push('has-password');
-                if (isFull) classes.push('full');
+            
+            ranking.forEach(([userId, scoreData], index) => {
+                const rankingItem = document.createElement('div');
+                rankingItem.className = 'ranking-item';
                 
-                const scoreRuleText = getScoreRuleText(room.scoreRule);
-                const scoreRuleIcon = room.scoreRule === 'ex' ? '⚡' : '📊';
+                const score = rule === 'ex' ? scoreData.exScore : scoreData.normalScore;
                 
-                return `
-                    <div class="${classes.join(' ')}">
-                        <div class="room-header">
-                            <div class="room-name">
-                                ${room.name}
-                                ${room.hasPassword ? '🔐' : ''}
-                            </div>
-                            <div class="room-stats">
-                                <div class="room-count">👥 ${room.playerCount}人</div>
-                                <div class="room-count">👀 ${room.spectatorCount}人</div>
-                            </div>
-                        </div>
-                        <div class="room-info">
-                            ${scoreRuleIcon} ${scoreRuleText} | ${room.currentSong}曲目進行中 | 完了曲数: ${room.songHistory}
-                        </div>
-                        <div class="room-info">
-                            作成者: ${room.creator} | 作成: ${new Date(room.createdAt).toLocaleString()}
-                        </div>
-                        <div class="room-actions">
-                            <button onclick="joinRoom('${room.roomId}', '${room.name}', ${room.hasPassword}, true)" 
-                                    ${isFull ? 'disabled' : ''}>
-                                プレイヤーで参加
-                            </button>
-                            <button onclick="joinRoom('${room.roomId}', '${room.name}', ${room.hasPassword}, false)" 
-                                    ${isFull ? 'disabled' : ''} class="btn-secondary">
-                                観戦者で参加
-                            </button>
-                        </div>
-                    </div>
+                rankingItem.innerHTML = `
+                    <span>${index + 1}位: ${scoreData.username}</span>
+                    <span>${score.toLocaleString()}</span>
                 `;
-            }).join('');
+                
+                rankingElement.appendChild(rankingItem);
+            });
         }
 
-        // ゲーム表示更新
-        function updateGameDisplay(data) {
-            document.getElementById('currentSongNumber').textContent = data.currentSong;
+        // 合計ポイント更新
+        function updateTotalPoints(totalPoints) {
+            const pointsList = document.getElementById('totalPointsList');
+            pointsList.innerHTML = '';
             
-            // プレイヤーランキング表示
-            const leaderboard = document.getElementById('leaderboard');
+            // ポイント順でソート
+            totalPoints.sort((a, b) => b.points - a.points);
             
-            if (!data.players || data.players.length === 0) {
-                leaderboard.innerHTML = '<div class="empty-state">プレイヤーがいません</div>';
-            } else {
-                leaderboard.innerHTML = data.players.map(player => {
-                    const isMe = player.userId === currentUserId;
-                    const classes = ['player'];
-                    if (isMe) classes.push('me');
-                    if (player.isCreator) classes.push('creator');
-                    if (player.isPythonClient) classes.push('python');
-                    
-                    const diffText = player.diff === 0 ? '👑' : `-${player.diff.toLocaleString()}`;
-                    
-                    return `
-                        <div class="${classes.join(' ')}">
-                            <div class="rank">${player.rank}位</div>
-                            <div class="name">${player.userId}${isMe ? ' (あなた)' : ''}</div>
-                            <div class="score">${player.score.toLocaleString()}</div>
-                            <div class="diff">${diffText}</div>
-                        </div>
-                    `;
-                }).join('');
-            }
-            
-            // 観戦者表示
-            const spectatorSection = document.getElementById('spectatorSection');
-            const spectatorList = document.getElementById('spectatorList');
-            
-            if (data.spectators && data.spectators.length > 0) {
-                spectatorSection.classList.remove('hidden');
-                spectatorList.innerHTML = data.spectators.map(spectator => {
-                    const client_type = spectator.isPythonClient ? "🐍" : "🌐";
-                    const isMe = spectator.userId === currentUserId;
-                    return `
-                        <div class="spectator-item">
-                            ${client_type} ${spectator.userId}${isMe ? ' (あなた)' : ''}
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                spectatorSection.classList.add('hidden');
-            }
-            
-            // ポイント表示更新
-            if (data.totalPoints) {
-                updatePointsTable(data.totalPoints);
-            }
-        }
-
-        function updatePointsTable(pointsData) {
-            const pointsTable = document.getElementById('pointsTable');
-            
-            if (!pointsData || pointsData.length === 0) {
-                pointsTable.innerHTML = '<div class="empty-state">ポイント情報がありません</div>';
-                return;
-            }
-
-            pointsTable.innerHTML = pointsData.map((entry, index) => {
-                const classes = ['point-item'];
-                if (index === 0) classes.push('first');
-                else if (index === 1) classes.push('second');
-                else if (index === 2) classes.push('third');
-                
-                const isMe = entry.userId === currentUserId;
-                
-                return `
-                    <div class="${classes.join(' ')}">
-                        <span>${index + 1}位 ${entry.userId}${isMe ? ' (あなた)' : ''}</span>
-                        <span>${entry.points}pt</span>
-                    </div>
+            totalPoints.forEach(point => {
+                const pointItem = document.createElement('div');
+                pointItem.className = 'points-item';
+                pointItem.innerHTML = `
+                    <span>${point.username}</span>
+                    <span>${point.points}pt</span>
                 `;
-            }).join('');
+                pointsList.appendChild(pointItem);
+            });
         }
 
-        function updateSongHistory(history) {
-            const songHistory = document.getElementById('songHistory');
+        // 役割切り替え
+        function toggleRole() {
+            if (!currentUser.id) return;
             
-            if (!history || history.length === 0) {
-                songHistory.innerHTML = '<div class="empty-state">まだ曲が終了していません</div>';
-                return;
-            }
+            isPlayer = !isPlayer;
+            socket.emit('toggleRole', { 
+                userId: currentUser.id, 
+                isPlayer 
+            });
+        }
 
-            songHistory.innerHTML = history.slice().reverse().map(song => {
-                const scoreRuleText = getScoreRuleText(song.scoreRule);
-                const scoreRuleIcon = song.scoreRule === 'ex' ? '⚡' : '📊';
+        // テストスコア送信
+        async function sendTestScore() {
+            const normalScore = parseInt(document.getElementById('testNormalScore').value) || 0;
+            const exScore = parseInt(document.getElementById('testExScore').value) || 0;
+            
+            try {
+                const response = await fetch('/api/score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        normalScore,
+                        exScore
+                    })
+                });
                 
-                return `
-                    <div class="history-item">
-                        <div class="history-header">
-                            第${song.songNumber}曲 (${scoreRuleIcon} ${scoreRuleText}) - ${new Date(song.timestamp).toLocaleTimeString()}
-                        </div>
-                        <div class="history-ranking">
-                            ${song.ranking.map(r => 
-                                `${r.rank}位 ${r.userId}: ${r.displayScore.toLocaleString()}点 (+${r.points}pt)`
-                            ).join(' | ')}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // モーダル制御
-        function showPasswordModal(roomName) {
-            document.getElementById('modalRoomName').textContent = roomName;
-            document.getElementById('joinPassword').value = '';
-            document.getElementById('passwordModal').style.display = 'block';
-        }
-
-        function closePasswordModal() {
-            document.getElementById('passwordModal').style.display = 'none';
-            pendingRoomJoin = null;
-        }
-
-        function showSongFinishedModal(data) {
-            document.getElementById('finishedSongNumber').textContent = data.songNumber;
-            document.getElementById('nextSongNumber').textContent = data.nextSong;
-            
-            const scoreRuleText = getScoreRuleText(data.scoreRule);
-            const scoreRuleIcon = data.scoreRule === 'ex' ? '⚡' : '📊';
-            
-            // 曲結果表示
-            const songRanking = document.getElementById('songRanking');
-            songRanking.innerHTML = data.ranking.map((entry, index) => {
-                const classes = ['ranking-item'];
-                if (index === 0) classes.push('first');
-                else if (index === 1) classes.push('second');
-                else if (index === 2) classes.push('third');
-                
-                return `
-                    <div class="${classes.join(' ')}">
-                        <span>${entry.rank}位 ${entry.userId}</span>
-                        <span>
-                            ${scoreRuleIcon} ${entry.displayScore.toLocaleString()}点 (+${entry.points}pt)
-                            <div style="font-size: 12px; opacity: 0.7;">
-                                📊${entry.normalScore.toLocaleString()} ⚡${entry.exScore.toLocaleString()}
-                            </div>
-                        </span>
-                    </div>
-                `;
-            }).join('');
-            
-            // タイトルにスコアルールを表示
-            document.querySelector('#songFinishedModal h3').innerHTML = 
-                `🏁 第${data.songNumber}曲目 結果発表！(${scoreRuleIcon} ${scoreRuleText})`;
-            
-            // 累積ポイント表示
-            const totalPointsRanking = document.getElementById('totalPointsRanking');
-            totalPointsRanking.innerHTML = data.totalPoints.slice(0, 5).map((entry, index) => {
-                const classes = ['ranking-item'];
-                if (index === 0) classes.push('first');
-                else if (index === 1) classes.push('second');
-                else if (index === 2) classes.push('third');
-                
-                return `
-                    <div class="${classes.join(' ')}">
-                        <span>${index + 1}位 ${entry.userId}</span>
-                        <span>${entry.points}pt</span>
-                    </div>
-                `;
-            }).join('');
-            
-            document.getElementById('songFinishedModal').style.display = 'block';
-        }
-
-        function closeSongFinishedModal() {
-            document.getElementById('songFinishedModal').style.display = 'none';
-        }
-
-        // ゲーム機能
-        function updateScore(score) {
-            if (!isConnected || !currentRoomId || !isPlayer) return;
-            
-            document.getElementById('currentScore').textContent = parseInt(score).toLocaleString();
-            socket.emit('score_update', parseInt(score));
-        }
-
-        function randomScore() {
-            if (!isPlayer) return;
-            const randomScore = Math.floor(Math.random() * 2000000);
-            document.getElementById('scoreSlider').value = randomScore;
-            updateScore(randomScore);
-        }
-
-        function simulateGame() {
-            if (!isPlayer) return;
-            
-            if (gameInterval) {
-                clearInterval(gameInterval);
-                gameInterval = null;
-                return;
-            }
-
-            let score = 0;
-            const increment = Math.floor(Math.random() * 10000) + 5000;
-            
-            gameInterval = setInterval(() => {
-                score += increment + Math.floor(Math.random() * 5000);
-                if (score > 2000000) {
-                    clearInterval(gameInterval);
-                    gameInterval = null;
-                    return;
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert(error.error);
                 }
-                
-                document.getElementById('scoreSlider').value = score;
-                updateScore(score);
-            }, 300);
+            } catch (error) {
+                console.error('Score submission error:', error);
+                alert('スコア送信に失敗しました');
+            }
         }
 
-        // 初期化（自動復旧機能付き）
-        window.addEventListener('load', () => {
-            const now = new Date();
-            const defaultUser = `Player${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}`;
-            document.getElementById('userId').value = defaultUser;
-            
-            document.getElementById('usePassword').addEventListener('change', (e) => {
-                const passwordField = document.getElementById('roomPassword');
-                passwordField.style.display = e.target.checked ? 'block' : 'none';
-                if (!e.target.checked) {
-                    passwordField.value = '';
+        // テスト曲終了
+        async function finishTestSong() {
+            try {
+                const response = await fetch('/api/finish-song', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUser.id
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert(error.error);
                 }
+            } catch (error) {
+                console.error('Finish song error:', error);
+                alert('曲終了通知に失敗しました');
+            }
+        }
+
+        // チャット機能
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentUser.id) return;
+            
+            socket.emit('sendMessage', {
+                userId: currentUser.id,
+                message
             });
             
-            window.addEventListener('click', (e) => {
-                const passwordModal = document.getElementById('passwordModal');
-                const songModal = document.getElementById('songFinishedModal');
-                if (e.target === passwordModal) {
-                    closePasswordModal();
-                }
-                if (e.target === songModal) {
-                    closeSongFinishedModal();
-                }
-            });
+            input.value = '';
+        }
 
-            document.addEventListener('visibilitychange', handleVisibilityChange);
-            setInterval(checkServerHealth, 5 * 60 * 1000);
+        function handleChatKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
 
-            window.addEventListener('online', () => {
-                console.log('🌐 ネットワークが復旧しました');
-                if (!isConnected && currentUserId) {
-                    setTimeout(manualReconnect, 1000);
-                }
-            });
+        function addChatMessage(message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'chat-message';
+            
+            const timestamp = new Date(message.timestamp).toLocaleTimeString();
+            messageElement.innerHTML = `
+                <span class="chat-username">${message.username}</span>
+                <span>${message.message}</span>
+                <small style="float: right; color: #718096;">${timestamp}</small>
+            `;
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
-            window.addEventListener('offline', () => {
-                console.log('📡 ネットワークが切断されました');
-                updateStatus('ネットワーク切断', 'disconnected');
-            });
-
-            window.addEventListener('beforeunload', () => {
-                stopKeepAlive();
-                if (socket) {
-                    socket.disconnect();
-                }
-            });
-
-            console.log('🚀 音ゲー大会システム初期化完了');
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Score Manager System initialized');
+            console.log('Environment:', isProduction ? 'Production' : 'Development');
         });
     </script>
 </body>
