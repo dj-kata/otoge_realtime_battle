@@ -116,21 +116,21 @@
             transform: translate(-50%, -50%);
             width: 400px;
             height: 60px;
-            background: #f0f0f0;
             border-radius: 30px;
             overflow: hidden;
             border: 3px solid #ddd;
+            background: transparent;
         }
 
         .score-bar {
             height: 100%;
-            width: 80%;
-            left: 10%;
-            position: relative;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
             background: linear-gradient(to right, #e74c3c 50%, #3498db 50%);
             transition: all 0.5s ease;
             border-radius: 30px;
-            transform: translateX(0);
         }
 
         .score-difference {
@@ -169,6 +169,8 @@
             padding: 15px;
             text-align: center;
             border-bottom: 2px solid #eee;
+            height: 60px; /* 固定高さで揺れを防止 */
+            vertical-align: middle;
         }
 
         .multi-table th {
@@ -486,6 +488,7 @@
         }
 
         function updateVisualizer(rankings) {
+            console.log('Updating visualizer with rankings:', rankings);
             if (currentMode === 'duel') {
                 updateDuelMode(rankings);
             } else {
@@ -521,9 +524,8 @@
                     document.getElementById('player2Type').className = 'player-type-badge';
                 }
 
-                // 中央位置に設定
+                // 中央位置に設定（同点状態）
                 const scoreBar = document.getElementById('scoreBar');
-                scoreBar.style.transform = 'translateX(0)';
                 scoreBar.style.background = 'linear-gradient(to right, #e74c3c 50%, #3498db 50%)';
                 document.getElementById('scoreDifference').textContent = '0';
                 return;
@@ -552,16 +554,14 @@
             // 点差の割合を計算（-1.0 ～ 1.0の範囲）
             let diffRatio = Math.max(-1.0, Math.min(1.0, scoreDiff / maxDiff));
             
-            // バーの移動距離を計算（最大40%移動、1割は残すため）
-            const maxMove = 40; // 40%まで移動
-            const movePercent = diffRatio * maxMove;
+            // グラデーションの境界位置を計算
+            // diffRatio = 0 (同点) -> 50%
+            // diffRatio = 1 (player1最大リード) -> 90%
+            // diffRatio = -1 (player2最大リード) -> 10%
+            const gradientPosition = 50 + (diffRatio * 40); // 10% ～ 90%の範囲
             
             const scoreBar = document.getElementById('scoreBar');
-            scoreBar.style.transform = `translateX(${movePercent}%)`;
-            
-            // グラデーションの位置も調整
-            const gradientCenter = 50 - movePercent; // movePercentの逆方向にグラデーション中心を移動
-            scoreBar.style.background = `linear-gradient(to right, #e74c3c ${gradientCenter}%, #3498db ${gradientCenter}%)`;
+            scoreBar.style.background = `linear-gradient(to right, #e74c3c ${gradientPosition}%, #3498db ${gradientPosition}%)`;
             
             // スコア差の表示
             const absDiff = Math.abs(scoreDiff);
@@ -575,6 +575,7 @@
 
         function updateMultiMode(rankings) {
             const tableBody = document.getElementById('multiTableBody');
+            console.log('Updating multi mode with', rankings.length, 'players:', rankings);
 
             if (rankings.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="4" class="no-data">スコア待ち...</td></tr>';
@@ -583,48 +584,24 @@
 
             const topScore = rankings.length > 0 ? rankings[0].score : 0;
             
-            // 既存の行を取得または作成
-            const existingRows = Array.from(tableBody.querySelectorAll('tr'));
+            // テーブルを一度クリアしてから再構築（揺れ防止のため行の高さを固定）
+            tableBody.innerHTML = '';
             
-            // 必要な行数まで行を追加
-            while (existingRows.length < rankings.length) {
-                const newRow = document.createElement('tr');
-                newRow.innerHTML = `
-                    <td class="rank-cell"></td>
-                    <td class="player-name-cell"></td>
-                    <td class="score-cell"></td>
-                    <td class="difference-cell"></td>
-                `;
-                tableBody.appendChild(newRow);
-                existingRows.push(newRow);
-            }
-            
-            // 余分な行を非表示にする
-            existingRows.forEach((row, index) => {
-                if (index >= rankings.length) {
-                    row.style.display = 'none';
-                } else {
-                    row.style.display = '';
-                    const player = rankings[index];
-                    const difference = topScore - player.score;
-                    
-                    // 各セルを更新
-                    const cells = row.querySelectorAll('td');
-                    cells[0].className = `rank-cell rank-${player.rank}`;
-                    cells[0].textContent = `#${player.rank}`;
-                    
-                    cells[1].className = 'player-name-cell';
-                    cells[1].innerHTML = `
+            rankings.forEach((player, index) => {
+                const row = document.createElement('tr');
+                const difference = topScore - player.score;
+                
+                row.innerHTML = `
+                    <td class="rank-cell rank-${player.rank}">#${player.rank}</td>
+                    <td class="player-name-cell">
                         ${player.username}
                         <span class="player-type-badge type-${player.type}">${player.type.toUpperCase()}</span>
-                    `;
-                    
-                    cells[2].className = 'score-cell';
-                    cells[2].textContent = player.score.toLocaleString();
-                    
-                    cells[3].className = 'difference-cell';
-                    cells[3].textContent = difference === 0 ? '-' : '-' + difference.toLocaleString();
-                }
+                    </td>
+                    <td class="score-cell">${player.score.toLocaleString()}</td>
+                    <td class="difference-cell">${difference === 0 ? '-' : '-' + difference.toLocaleString()}</td>
+                `;
+                
+                tableBody.appendChild(row);
             });
         }
 
