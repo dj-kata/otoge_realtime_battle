@@ -124,11 +124,13 @@
 
         .score-bar {
             height: 100%;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            transition: all 0.5s ease;
+            width: 80%;
+            left: 10%;
             position: relative;
+            background: linear-gradient(to right, #e74c3c 50%, #3498db 50%);
+            transition: all 0.5s ease;
             border-radius: 30px;
-            transform-origin: left center;
+            transform: translateX(0);
         }
 
         .score-difference {
@@ -397,6 +399,7 @@
             socket.on('roomInfo', (room) => {
                 currentRoom = room;
                 updateRoomInfo(room);
+                console.log('Room info received:', room);
             });
 
             socket.on('rankingsUpdated', (rankings) => {
@@ -444,6 +447,8 @@
                         // WebSocketで部屋の更新を監視
                         socket.emit('watchRoom', { roomId });
                         document.getElementById('status').innerHTML = '✅ 部屋に接続しました - スコア待ち';
+                        
+                        console.log('Connected to room:', room);
                     } else {
                         document.getElementById('status').innerHTML = '❌ 指定された部屋が見つかりません';
                     }
@@ -516,8 +521,10 @@
                     document.getElementById('player2Type').className = 'player-type-badge';
                 }
 
-                document.getElementById('scoreBar').style.width = '50%';
-                document.getElementById('scoreBar').style.left = '25%';
+                // 中央位置に設定
+                const scoreBar = document.getElementById('scoreBar');
+                scoreBar.style.transform = 'translateX(0)';
+                scoreBar.style.background = 'linear-gradient(to right, #e74c3c 50%, #3498db 50%)';
                 document.getElementById('scoreDifference').textContent = '0';
                 return;
             }
@@ -537,74 +544,87 @@
             document.getElementById('player2Type').className = `player-type-badge type-${player2.type}`;
 
             // スコア差の計算とバー表示
-            const scoreDiff = Math.abs(player1.score - player2.score);
-            const maxScore = Math.max(player1.score, player2.score);
-            const minScore = Math.min(player1.score, player2.score);
+            const scoreDiff = player1.score - player2.score; // 正の値でplayer1リード、負の値でplayer2リード
             
-            let barPosition, barWidth;
+            // ルールに応じて最大点差を設定
+            const maxDiff = currentRoom && currentRoom.rule === 'ex' ? 100 : 200000;
             
-            if (maxScore === 0) {
-                barPosition = 25;
-                barWidth = 50;
-            } else {
-                const diffRatio = Math.min(scoreDiff / Math.max(maxScore, 1000), 0.8); // 最大80%まで
-                barWidth = 20 + (diffRatio * 60); // 20%から80%
-                
-                if (player1.score > player2.score) {
-                    barPosition = 50 - (barWidth / 2);
-                } else {
-                    barPosition = 50 - (barWidth / 2);
-                }
-            }
-
+            // 点差の割合を計算（-1.0 ～ 1.0の範囲）
+            let diffRatio = Math.max(-1.0, Math.min(1.0, scoreDiff / maxDiff));
+            
+            // バーの移動距離を計算（最大40%移動、1割は残すため）
+            const maxMove = 40; // 40%まで移動
+            const movePercent = diffRatio * maxMove;
+            
             const scoreBar = document.getElementById('scoreBar');
-            scoreBar.style.width = barWidth + '%';
-            scoreBar.style.left = barPosition + '%';
+            scoreBar.style.transform = `translateX(${movePercent}%)`;
             
-            // バーの向きと色を設定
-            if (player1.score > player2.score) {
-                scoreBar.style.background = 'linear-gradient(45deg, #e74c3c, #c0392b)';
-                scoreBar.style.transformOrigin = 'left center';
-            } else if (player2.score > player1.score) {
-                scoreBar.style.background = 'linear-gradient(45deg, #3498db, #2980b9)';
-                scoreBar.style.transformOrigin = 'right center';
+            // グラデーションの位置も調整
+            const gradientCenter = 50 - movePercent; // movePercentの逆方向にグラデーション中心を移動
+            scoreBar.style.background = `linear-gradient(to right, #e74c3c ${gradientCenter}%, #3498db ${gradientCenter}%)`;
+            
+            // スコア差の表示
+            const absDiff = Math.abs(scoreDiff);
+            if (absDiff === 0) {
+                document.getElementById('scoreDifference').textContent = '同点';
             } else {
-                scoreBar.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
-                scoreBar.style.transformOrigin = 'center center';
+                const leader = scoreDiff > 0 ? player1.username : player2.username;
+                document.getElementById('scoreDifference').textContent = `${leader} +${absDiff.toLocaleString()}`;
             }
-            
-            document.getElementById('scoreDifference').textContent = 
-                scoreDiff === 0 ? '同点' : scoreDiff.toLocaleString();
         }
 
         function updateMultiMode(rankings) {
             const tableBody = document.getElementById('multiTableBody');
-            tableBody.innerHTML = '';
 
             if (rankings.length === 0) {
-                const row = document.createElement('tr');
-                row.innerHTML = '<td colspan="4" class="no-data">スコア待ち...</td>';
-                tableBody.appendChild(row);
+                tableBody.innerHTML = '<tr><td colspan="4" class="no-data">スコア待ち...</td></tr>';
                 return;
             }
 
             const topScore = rankings.length > 0 ? rankings[0].score : 0;
-
-            rankings.forEach((player, index) => {
-                const row = document.createElement('tr');
-                const difference = topScore - player.score;
-                
-                row.innerHTML = `
-                    <td class="rank-cell rank-${player.rank}">#${player.rank}</td>
-                    <td class="player-name-cell">
+            
+            // 既存の行を取得または作成
+            const existingRows = Array.from(tableBody.querySelectorAll('tr'));
+            
+            // 必要な行数まで行を追加
+            while (existingRows.length < rankings.length) {
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td class="rank-cell"></td>
+                    <td class="player-name-cell"></td>
+                    <td class="score-cell"></td>
+                    <td class="difference-cell"></td>
+                `;
+                tableBody.appendChild(newRow);
+                existingRows.push(newRow);
+            }
+            
+            // 余分な行を非表示にする
+            existingRows.forEach((row, index) => {
+                if (index >= rankings.length) {
+                    row.style.display = 'none';
+                } else {
+                    row.style.display = '';
+                    const player = rankings[index];
+                    const difference = topScore - player.score;
+                    
+                    // 各セルを更新
+                    const cells = row.querySelectorAll('td');
+                    cells[0].className = `rank-cell rank-${player.rank}`;
+                    cells[0].textContent = `#${player.rank}`;
+                    
+                    cells[1].className = 'player-name-cell';
+                    cells[1].innerHTML = `
                         ${player.username}
                         <span class="player-type-badge type-${player.type}">${player.type.toUpperCase()}</span>
-                    </td>
-                    <td class="score-cell">${player.score.toLocaleString()}</td>
-                    <td class="difference-cell">${difference === 0 ? '-' : '-' + difference.toLocaleString()}</td>
-                `;
-                
-                tableBody.appendChild(row);
+                    `;
+                    
+                    cells[2].className = 'score-cell';
+                    cells[2].textContent = player.score.toLocaleString();
+                    
+                    cells[3].className = 'difference-cell';
+                    cells[3].textContent = difference === 0 ? '-' : '-' + difference.toLocaleString();
+                }
             });
         }
 
