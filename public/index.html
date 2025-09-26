@@ -519,7 +519,10 @@
                         <div class="flex gap-10 mb-10">
                             <button id="resetPointsBtn" class="btn btn-secondary btn-small">ポイントリセット</button>
                             <button id="deleteRoomBtn" class="btn btn-danger btn-small">部屋削除</button>
-                            <button id="openVisualizerBtn" class="btn btn-small">可視化画面を開く</button>
+                        </div>
+                        <div class="flex gap-10 mb-10">
+                            <button id="openDuelVisualizerBtn" class="btn btn-small">2人対戦ビュー</button>
+                            <button id="openMultiVisualizerBtn" class="btn btn-small">多人数ビュー</button>
                         </div>
                     </div>
 
@@ -621,7 +624,8 @@
             // 部屋主機能
             document.getElementById('resetPointsBtn').addEventListener('click', resetPoints);
             document.getElementById('deleteRoomBtn').addEventListener('click', deleteRoom);
-            document.getElementById('openVisualizerBtn').addEventListener('click', openVisualizer);
+            document.getElementById('openDuelVisualizerBtn').addEventListener('click', openDuelVisualizer);
+            document.getElementById('openMultiVisualizerBtn').addEventListener('click', openMultiVisualizer);
 
             // チャット
             document.getElementById('sendChatBtn').addEventListener('click', sendMessage);
@@ -1136,10 +1140,17 @@
             socket.emit('finishTestSong');
         }
 
-        function openVisualizer() {
+        function openDuelVisualizer() {
             if (currentRoom) {
-                const url = `/visualizer.html?room=${currentRoom.id}`;
+                const url = `/duel.html?room=${currentRoom.id}`;
                 window.open(url, '_blank', 'width=1200,height=800');
+            }
+        }
+
+        function openMultiVisualizer() {
+            if (currentRoom) {
+                const url = `/multi.html?room=${currentRoom.id}`;
+                window.open(url, '_blank', 'width=1200,height=600');
             }
         }
     </script>

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2人対戦ビュー - Rhythm Game</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .visualizer-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            min-height: 500px;
+        }
+
+        .room-info {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #555;
+        }
+
+        .room-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .room-rule {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .duel-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 400px;
+            position: relative;
+        }
+
+        .player-info {
+            flex: 1;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .player-name {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .player-score {
+            font-size: 1.5rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .player1 { color: #e74c3c; }
+        .player2 { color: #3498db; }
+
+        .player-type-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .type-api { background: #007bff; color: white; }
+
+        .score-bar-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 60px;
+            border-radius: 30px;
+            overflow: hidden;
+            border: 3px solid #ddd;
+            background: transparent;
+        }
+
+        .score-bar {
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: linear-gradient(to right, #e74c3c 50%, #3498db 50%);
+            transition: all 0.5s ease;
+            border-radius: 30px;
+        }
+
+        .center-line {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 2px;
+            height: 100%;
+            background: #333;
+            z-index: 10;
+            transform: translateX(-50%);
+        }
+
+        .score-difference {
+            position: absolute;
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 18px;
+            white-space: nowrap;
+            z-index: 15;
+        }
+
+        /* アニメーション */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .duel-container {
+                flex-direction: column;
+                height: auto;
+                gap: 20px;
+            }
+
+            .score-bar-container {
+                position: static;
+                transform: none;
+                width: 100%;
+                margin: 20px 0;
+            }
+
+            .center-line {
+                height: 60px;
+            }
+
+            .score-difference {
+                position: static;
+                transform: none;
+                margin-top: 10px;
+                display: inline-block;
+            }
+
+            .player-name {
+                font-size: 1.5rem;
+            }
+
+            .player-score {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚔️ 2人対戦ビュー</h1>
+            <p>リアルタイム対戦スコア表示</p>
+        </div>
+
+        <div class="visualizer-container">
+            <div class="room-info">
+                <div id="roomName" class="room-name">部屋に接続中...</div>
+                <div id="roomRule" class="room-rule">-</div>
+            </div>
+
+            <div id="status" class="status">
+                部屋への接続を待機中...
+            </div>
+
+            <div class="duel-container">
+                <div class="player-info">
+                    <div id="player1Name" class="player-name player1">Player 1</div>
+                    <div id="player1Score" class="player-score">0</div>
+                    <div id="player1Type" class="player-type-badge type-api">API</div>
+                </div>
+
+                <div class="score-bar-container">
+                    <div id="scoreBar" class="score-bar"></div>
+                    <div class="center-line"></div>
+                    <div id="scoreDifference" class="score-difference">0</div>
+                </div>
+
+                <div class="player-info">
+                    <div id="player2Name" class="player-name player2">Player 2</div>
+                    <div id="player2Score" class="player-score">0</div>
+                    <div id="player2Type" class="player-type-badge type-api">API</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let socket;
+        let currentRoom = null;
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomId = urlParams.get('room');
+
+            if (!roomId) {
+                document.getElementById('status').innerHTML = '❌ 部屋IDが指定されていません';
+                return;
+            }
+
+            socket = io();
+            setupEventListeners();
+            connectToRoom(roomId);
+        });
+
+        function setupEventListeners() {
+            // WebSocketイベント
+            socket.on('connect', () => {
+                console.log('Connected to server');
+            });
+
+            socket.on('roomInfo', (room) => {
+                currentRoom = room;
+                updateRoomInfo(room);
+                console.log('Room info received:', room);
+            });
+
+            socket.on('rankingsUpdated', (rankings) => {
+                console.log('Rankings updated:', rankings);
+                updateDuelMode(rankings);
+            });
+
+            socket.on('scoreUpdated', (data) => {
+                console.log('Score updated:', data);
+                addScoreUpdateEffect();
+            });
+
+            socket.on('songFinished', (data) => {
+                console.log('Song finished:', data);
+                if (data.rankings) {
+                    updateDuelMode(data.rankings);
+                }
+            });
+
+            socket.on('error', (data) => {
+                console.error('Socket error:', data);
+                document.getElementById('status').innerHTML = `❌ エラー: ${data.message}`;
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('status').innerHTML = '❌ サーバーとの接続が切断されました';
+            });
+        }
+
+        function connectToRoom(roomId) {
+            document.getElementById('status').innerHTML = '🔄 部屋に接続中...';
+            
+            // 部屋の情報を取得
+            fetch(`/api/rooms`)
+                .then(response => response.json())
+                .then(rooms => {
+                    const room = rooms.find(r => r.id === roomId);
+                    if (room) {
+                        currentRoom = room;
+                        updateRoomInfo(room);
+                        
+                        // WebSocketで部屋の更新を監視
+                        socket.emit('watchRoom', { roomId });
+                        document.getElementById('status').innerHTML = '✅ 部屋に接続しました - スコア待ち';
+                        
+                        console.log('Connected to room:', room);
+                    } else {
+                        document.getElementById('status').innerHTML = '❌ 指定された部屋が見つかりません';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching room info:', error);
+                    document.getElementById('status').innerHTML = '❌ 部屋情報の取得に失敗しました';
+                });
+        }
+
+        function updateRoomInfo(room) {
+            document.getElementById('roomName').textContent = room.name;
+            document.getElementById('roomRule').textContent = room.rule === 'ex' ? 'EXスコア' : '通常スコア';
+        }
+
+        function updateDuelMode(rankings) {
+            // APIユーザーのみを対象にフィルタ
+            const apiPlayers = rankings.filter(r => r.type === 'api' && r.username !== 'Unknown').slice(0, 2);
+            
+            if (apiPlayers.length < 2) {
+                // 2人未満の場合
+                if (apiPlayers.length === 1) {
+                    document.getElementById('player1Name').textContent = apiPlayers[0].username;
+                    document.getElementById('player1Score').textContent = apiPlayers[0].score.toLocaleString();
+                    document.getElementById('player1Type').style.display = 'inline-block';
+                    
+                    document.getElementById('player2Name').textContent = '待機中';
+                    document.getElementById('player2Score').textContent = '0';
+                    document.getElementById('player2Type').style.display = 'none';
+                } else {
+                    document.getElementById('player1Name').textContent = '待機中';
+                    document.getElementById('player1Score').textContent = '0';
+                    document.getElementById('player1Type').style.display = 'none';
+                    
+                    document.getElementById('player2Name').textContent = '待機中';
+                    document.getElementById('player2Score').textContent = '0';
+                    document.getElementById('player2Type').style.display = 'none';
+                }
+
+                // 中央位置に設定（同点状態）
+                const scoreBar = document.getElementById('scoreBar');
+                scoreBar.style.background = 'linear-gradient(to right, #e74c3c 50%, #3498db 50%)';
+                document.getElementById('scoreDifference').textContent = '0';
+                return;
+            }
+
+            // 2人のプレイヤー情報を設定
+            const player1 = apiPlayers[0];
+            const player2 = apiPlayers[1];
+            
+            document.getElementById('player1Name').textContent = player1.username;
+            document.getElementById('player1Score').textContent = player1.score.toLocaleString();
+            document.getElementById('player1Type').style.display = 'inline-block';
+            
+            document.getElementById('player2Name').textContent = player2.username;
+            document.getElementById('player2Score').textContent = player2.score.toLocaleString();
+            document.getElementById('player2Type').style.display = 'inline-block';
+
+            // スコア差の計算とバー表示
+            const scoreDiff = player1.score - player2.score; // 正の値でplayer1リード、負の値でplayer2リード
+            
+            // ルールに応じて最大点差を設定
+            const maxDiff = currentRoom && currentRoom.rule === 'ex' ? 100 : 200000;
+            
+            // 点差の割合を計算（-1.0 ～ 1.0の範囲）
+            let diffRatio = Math.max(-1.0, Math.min(1.0, scoreDiff / maxDiff));
+            
+            // グラデーション境界位置を計算
+            // diffRatio = 0 (同点) -> 50%
+            // diffRatio = 1 (player1最大リード) -> 90%
+            // diffRatio = -1 (player2最大リード) -> 10%
+            const gradientPosition = 50 + (diffRatio * 40); // 10% ～ 90%の範囲
+            
+            const scoreBar = document.getElementById('scoreBar');
+            scoreBar.style.background = `linear-gradient(to right, #e74c3c ${gradientPosition}%, #3498db ${gradientPosition}%)`;
+            
+            // スコア差の表示（k単位）
+            const absDiff = Math.abs(scoreDiff);
+            if (absDiff === 0) {
+                document.getElementById('scoreDifference').textContent = '0';
+            } else {
+                const formattedDiff = formatScore(absDiff);
+                const leader = scoreDiff > 0 ? player1.username : player2.username;
+                document.getElementById('scoreDifference').textContent = `${leader} +${formattedDiff}`;
+            }
+        }
+
+        function formatScore(score) {
+            if (score >= 1000000) {
+                return Math.round(score / 1000000 * 10) / 10 + 'M';
+            } else if (score >= 1000) {
+                return Math.round(score / 1000) + 'k';
+            } else {
+                return score.toString();
+            }
+        }
+
+        function addScoreUpdateEffect() {
+            const container = document.querySelector('.visualizer-container');
+            container.classList.add('pulse');
+            
+            setTimeout(() => {
+                container.classList.remove('pulse');
+            }, 500);
+        }
+    </script>
+</body>
+</html>

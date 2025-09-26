@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多人数ビュー - Rhythm Game</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .visualizer-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            min-height: 500px;
+        }
+
+        .room-info {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #555;
+        }
+
+        .room-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .room-rule {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .multi-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .multi-table th,
+        .multi-table td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            height: 60px;
+            vertical-align: middle;
+        }
+
+        .multi-table th {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .multi-table tbody tr {
+            transition: all 0.3s;
+        }
+
+        .multi-table tbody tr:hover {
+            background: #f8f9fa;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .rank-cell {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .rank-1 { color: #ffd700; }
+        .rank-2 { color: #c0c0c0; }
+        .rank-3 { color: #cd7f32; }
+
+        .player-name-cell {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .score-cell {
+            font-size: 1.1rem;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .difference-cell {
+            font-size: 1rem;
+            color: #6c757d;
+        }
+
+        .player-type-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .type-api { background: #007bff; color: white; }
+
+        .no-data {
+            text-align: center;
+            color: #6c757d;
+            font-size: 1.2rem;
+            padding: 50px;
+        }
+
+        /* アニメーション */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .multi-table {
+                font-size: 14px;
+            }
+
+            .multi-table th,
+            .multi-table td {
+                padding: 10px 5px;
+            }
+
+            .rank-cell {
+                font-size: 1.2rem;
+            }
+
+            .player-name-cell {
+                font-size: 1rem;
+            }
+
+            .player-type-badge {
+                display: block;
+                margin: 5px 0 0 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👥 多人数ビュー</h1>
+            <p>リアルタイムランキング表示</p>
+        </div>
+
+        <div class="visualizer-container">
+            <div class="room-info">
+                <div id="roomName" class="room-name">部屋に接続中...</div>
+                <div id="roomRule" class="room-rule">-</div>
+            </div>
+
+            <div id="status" class="status">
+                部屋への接続を待機中...
+            </div>
+
+            <table class="multi-table">
+                <thead>
+                    <tr>
+                        <th>順位</th>
+                        <th>プレイヤー</th>
+                        <th>スコア</th>
+                        <th>1位との差</th>
+                    </tr>
+                </thead>
+                <tbody id="multiTableBody">
+                    <tr>
+                        <td colspan="4" class="no-data">スコア待ち...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let socket;
+        let currentRoom = null;
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomId = urlParams.get('room');
+
+            if (!roomId) {
+                document.getElementById('status').innerHTML = '❌ 部屋IDが指定されていません';
+                return;
+            }
+
+            socket = io();
+            setupEventListeners();
+            connectToRoom(roomId);
+        });
+
+        function setupEventListeners() {
+            // WebSocketイベント
+            socket.on('connect', () => {
+                console.log('Connected to server');
+            });
+
+            socket.on('roomInfo', (room) => {
+                currentRoom = room;
+                updateRoomInfo(room);
+                console.log('Room info received:', room);
+            });
+
+            socket.on('rankingsUpdated', (rankings) => {
+                console.log('Rankings updated:', rankings);
+                updateMultiMode(rankings);
+            });
+
+            socket.on('scoreUpdated', (data) => {
+                console.log('Score updated:', data);
+                addScoreUpdateEffect();
+            });
+
+            socket.on('songFinished', (data) => {
+                console.log('Song finished:', data);
+                if (data.rankings) {
+                    updateMultiMode(data.rankings);
+                }
+            });
+
+            socket.on('error', (data) => {
+                console.error('Socket error:', data);
+                document.getElementById('status').innerHTML = `❌ エラー: ${data.message}`;
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('status').innerHTML = '❌ サーバーとの接続が切断されました';
+            });
+        }
+
+        function connectToRoom(roomId) {
+            document.getElementById('status').innerHTML = '🔄 部屋に接続中...';
+            
+            // 部屋の情報を取得
+            fetch(`/api/rooms`)
+                .then(response => response.json())
+                .then(rooms => {
+                    const room = rooms.find(r => r.id === roomId);
+                    if (room) {
+                        currentRoom = room;
+                        updateRoomInfo(room);
+                        
+                        // WebSocketで部屋の更新を監視
+                        socket.emit('watchRoom', { roomId });
+                        document.getElementById('status').innerHTML = '✅ 部屋に接続しました - スコア待ち';
+                        
+                        console.log('Connected to room:', room);
+                    } else {
+                        document.getElementById('status').innerHTML = '❌ 指定された部屋が見つかりません';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching room info:', error);
+                    document.getElementById('status').innerHTML = '❌ 部屋情報の取得に失敗しました';
+                });
+        }
+
+        function updateRoomInfo(room) {
+            document.getElementById('roomName').textContent = room.name;
+            document.getElementById('roomRule').textContent = room.rule === 'ex' ? 'EXスコア' : '通常スコア';
+        }
+
+        function updateMultiMode(rankings) {
+            const tableBody = document.getElementById('multiTableBody');
+            
+            // APIユーザーのみを対象にフィルタ
+            const apiPlayers = rankings.filter(r => r.type === 'api' && r.username !== 'Unknown');
+            
+            console.log('Updating multi mode with', apiPlayers.length, 'API players:', apiPlayers);
+
+            if (apiPlayers.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="no-data">スコア待ち...</td></tr>';
+                return;
+            }
+
+            const topScore = apiPlayers.length > 0 ? apiPlayers[0].score : 0;
+            
+            // テーブルを一度クリアしてから再構築
+            tableBody.innerHTML = '';
+            
+            apiPlayers.forEach((player, index) => {
+                const row = document.createElement('tr');
+                const difference = topScore - player.score;
+                
+                row.innerHTML = `
+                    <td class="rank-cell rank-${player.rank}">#${player.rank}</td>
+                    <td class="player-name-cell">
+                        ${player.username}
+                        <span class="player-type-badge type-api">API</span>
+                    </td>
+                    <td class="score-cell">${player.score.toLocaleString()}</td>
+                    <td class="difference-cell">${difference === 0 ? '-' : '-' + difference.toLocaleString()}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        function addScoreUpdateEffect() {
+            const container = document.querySelector('.visualizer-container');
+            container.classList.add('pulse');
+            
+            setTimeout(() => {
+                container.classList.remove('pulse');
+            }, 500);
+        }
+    </script>
+</body>
+</html>
