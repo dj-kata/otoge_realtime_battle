@@ -1,7 +1,7 @@
 {
-  "name": "score-manager-app",
+  "name": "rhythm-game-score-system",
   "version": "1.0.0",
-  "description": "リアルタイムスコア管理システム",
+  "description": "Real-time rhythm game score management system",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
