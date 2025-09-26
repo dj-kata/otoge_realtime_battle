@@ -122,6 +122,16 @@
             left: 50%;
             transform: translate(-50%, -50%);
             width: 400px;
+            height: 120px; /* 高さを拡張して上の要素も表示 */
+            border-radius: 30px;
+            background: transparent;
+        }
+
+        .score-bar-wrapper {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
             height: 60px;
             border-radius: 30px;
             overflow: hidden;
@@ -153,17 +163,21 @@
 
         .score-difference {
             position: absolute;
-            top: -50px;
+            top: 0;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.9);
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 10px 20px;
+            border-radius: 25px;
             font-weight: bold;
-            font-size: 18px;
+            font-size: 20px;
             white-space: nowrap;
             z-index: 15;
+            min-width: 80px;
+            text-align: center;
+            border: 2px solid #fff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
         /* アニメーション */
@@ -199,8 +213,10 @@
             .score-difference {
                 position: static;
                 transform: none;
-                margin-top: 10px;
+                margin: 10px auto 0 auto;
                 display: inline-block;
+                font-size: 18px;
+                padding: 8px 16px;
             }
 
             .player-name {
@@ -238,9 +254,11 @@
                 </div>
 
                 <div class="score-bar-container">
-                    <div id="scoreBar" class="score-bar"></div>
-                    <div class="center-line"></div>
                     <div id="scoreDifference" class="score-difference">0</div>
+                    <div class="score-bar-wrapper">
+                        <div id="scoreBar" class="score-bar"></div>
+                        <div class="center-line"></div>
+                    </div>
                 </div>
 
                 <div class="player-info">
@@ -267,6 +285,10 @@
                 return;
             }
 
+            // 初期表示を設定
+            document.getElementById('scoreDifference').textContent = '0';
+            console.log('Initial page load - score difference set to 0');
+
             socket = io();
             setupEventListeners();
             connectToRoom(roomId);
@@ -287,11 +309,15 @@
             socket.on('rankingsUpdated', (rankings) => {
                 console.log('Rankings updated:', rankings);
                 updateDuelMode(rankings);
+                // 点差表示の強制更新確認
+                console.log('Score difference element text:', document.getElementById('scoreDifference').textContent);
             });
 
             socket.on('scoreUpdated', (data) => {
                 console.log('Score updated:', data);
                 addScoreUpdateEffect();
+                // スコア更新時にも表示を確認
+                console.log('Score difference element text after score update:', document.getElementById('scoreDifference').textContent);
             });
 
             socket.on('songFinished', (data) => {
@@ -327,7 +353,10 @@
                         socket.emit('watchRoom', { roomId });
                         document.getElementById('status').innerHTML = '✅ 部屋に接続しました - スコア待ち';
                         
+                        // 初期表示を設定
+                        document.getElementById('scoreDifference').textContent = '0';
                         console.log('Connected to room:', room);
+                        console.log('Initial score difference set to: 0');
                     } else {
                         document.getElementById('status').innerHTML = '❌ 指定された部屋が見つかりません';
                     }
@@ -346,6 +375,8 @@
         function updateDuelMode(rankings) {
             // APIユーザーのみを対象にフィルタ
             const apiPlayers = rankings.filter(r => r.type === 'api' && r.username !== 'Unknown').slice(0, 2);
+            
+            console.log('Updating duel mode with players:', apiPlayers);
             
             if (apiPlayers.length < 2) {
                 // 2人未満の場合
@@ -388,6 +419,9 @@
 
             // スコア差の計算とバー表示
             const scoreDiff = player1.score - player2.score; // 正の値でplayer1リード、負の値でplayer2リード
+            const absDiff = Math.abs(scoreDiff);
+            
+            console.log(`Score diff: ${scoreDiff}, Abs diff: ${absDiff}`);
             
             // ルールに応じて最大点差を設定
             const maxDiff = currentRoom && currentRoom.rule === 'ex' ? 100 : 200000;
@@ -404,23 +438,30 @@
             const scoreBar = document.getElementById('scoreBar');
             scoreBar.style.background = `linear-gradient(to right, #e74c3c ${gradientPosition}%, #3498db ${gradientPosition}%)`;
             
-            // スコア差の表示（k単位）
-            const absDiff = Math.abs(scoreDiff);
+            // スコア差の表示（常時k単位で表示）
+            let diffDisplay;
             if (absDiff === 0) {
-                document.getElementById('scoreDifference').textContent = '0';
+                diffDisplay = '0';
             } else {
-                const formattedDiff = formatScore(absDiff);
-                const leader = scoreDiff > 0 ? player1.username : player2.username;
-                document.getElementById('scoreDifference').textContent = `${leader} +${formattedDiff}`;
+                diffDisplay = formatScore(absDiff);
             }
+            
+            console.log(`Formatted diff: ${diffDisplay}`);
+            document.getElementById('scoreDifference').textContent = diffDisplay;
         }
 
         function formatScore(score) {
+            console.log(`Formatting score: ${score}`);
             if (score >= 1000000) {
-                return Math.round(score / 1000000 * 10) / 10 + 'M';
+                const formatted = Math.round(score / 1000000 * 10) / 10 + 'M';
+                console.log(`Formatted as: ${formatted}`);
+                return formatted;
             } else if (score >= 1000) {
-                return Math.round(score / 1000) + 'k';
+                const formatted = Math.round(score / 1000) + 'k';
+                console.log(`Formatted as: ${formatted}`);
+                return formatted;
             } else {
+                console.log(`Formatted as: ${score}`);
                 return score.toString();
             }
         }
@@ -433,6 +474,29 @@
                 container.classList.remove('pulse');
             }, 500);
         }
+
+        // デバッグ用: 手動で点差表示をテスト
+        function testScoreDifference() {
+            const testDiffs = [0, 1000, 15000, 150000, 1500000];
+            let index = 0;
+            
+            setInterval(() => {
+                const diff = testDiffs[index % testDiffs.length];
+                const formatted = formatScore(diff);
+                document.getElementById('scoreDifference').textContent = formatted;
+                console.log(`Test: Setting score difference to ${formatted}`);
+                index++;
+            }, 2000);
+        }
+
+        // デバッグ用: Ctrl+Tでテスト開始
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 't') {
+                e.preventDefault();
+                console.log('Starting score difference test...');
+                testScoreDifference();
+            }
+        });
     </script>
 </body>
 </html>
