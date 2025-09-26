@@ -421,6 +421,11 @@
                 updateMemberList(data.members);
             });
 
+            socket.on('memberLeft', (data) => {
+                updateMemberList(data.members);
+                console.log(`${data.leftUser.username} が退室しました`);
+            });
+
             socket.on('memberRoleChanged', (data) => {
                 updateMemberList(data.members);
             });
@@ -607,13 +612,24 @@
         }
 
         // 部屋退室
-        function leaveRoom() {
-            if (confirm('部屋を退室しますか？')) {
-                showMenu();
-                currentUser.id = null;
-                currentUser.roomId = null;
-                currentRoom = null;
+        async function leaveRoom() {
+            if (!confirm('部屋を退室しますか？')) return;
+            
+            if (currentUser.id) {
+                try {
+                    await fetch('/api/leave', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: currentUser.id })
+                    });
+                } catch (error) {
+                    console.error('Leave room error:', error);
+                }
             }
+            
+            showMenu();
+            currentUser.roomId = null;
+            currentRoom = null;
         }
 
         // ゲーム画面更新

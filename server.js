@@ -272,6 +272,11 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
   room.addMember(userId, user.username);
   user.roomId = roomId;
 
+  // リアルタイム更新: 他のメンバーに参加を通知
+  io.to(roomId).emit('memberJoined', {
+    members: Array.from(room.members.values())
+  });
+
   res.json({ 
     message: 'Joined room successfully',
     room: {
@@ -283,6 +288,49 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
       id: userId,
       username: user.username
     }
+  });
+});
+
+// 退室
+app.post('/api/leave', (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  const user = users.get(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (!user.roomId) {
+    return res.status(400).json({ error: 'User is not in any room' });
+  }
+
+  const room = rooms.get(user.roomId);
+  if (room) {
+    room.removeMember(userId);
+    
+    // リアルタイム更新: 他のメンバーに退室を通知
+    io.to(user.roomId).emit('memberLeft', {
+      members: Array.from(room.members.values()),
+      leftUser: {
+        id: userId,
+        username: user.username
+      }
+    });
+
+    // 部屋が空になったら削除
+    if (room.members.size === 0) {
+      rooms.delete(user.roomId);
+    }
+  }
+
+  user.roomId = null;
+
+  res.json({ 
+    message: 'Left room successfully'
   });
 });
 
@@ -309,8 +357,8 @@ app.post('/api/score', (req, res) => {
     return res.status(400).json({ error: 'Cannot set score' });
   }
 
-  // リアルタイム更新
-  io.to(room.id).emit('scoreUpdate', {
+  // リアルタイム更新: 全メンバーに順位更新を通知
+  io.to(user.roomId).emit('scoreUpdate', {
     ranking: room.getRanking(),
     rule: room.rule
   });
@@ -341,8 +389,8 @@ app.post('/api/finish-song', (req, res) => {
     return res.status(400).json({ error: 'Cannot finish song' });
   }
 
-  // リアルタイム更新
-  io.to(room.id).emit('songFinished', {
+  // リアルタイム更新: 全メンバーに曲終了・ポイント更新を通知
+  io.to(user.roomId).emit('songFinished', {
     totalPoints: Array.from(room.totalPoints.entries()).map(([userId, points]) => ({
       userId,
       username: room.members.get(userId)?.username,
