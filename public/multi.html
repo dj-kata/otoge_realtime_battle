@@ -111,12 +111,12 @@
         }
 
         .color-bar {
-            width: 8px;
-            height: 100%;
-            position: absolute;
-            left: 0;
-            top: 0;
-            border-radius: 0 4px 4px 0;
+            width: 6px;
+            height: 40px;
+            display: inline-block;
+            margin-right: 10px;
+            border-radius: 3px;
+            vertical-align: middle;
         }
 
         .rank-cell {
@@ -128,7 +128,6 @@
               1px 1px 1px #000, -1px -1px 1px #000,
               1px 1px 1px #000, 1px -1px 1px #000;
             position: relative;
-            padding-left: 20px;
         }
 
         .rank-1 {
@@ -242,7 +241,8 @@
             }
 
             .color-bar {
-                width: 6px;
+                width: 4px;
+                height: 30px;
             }
         }
     </style>
@@ -412,16 +412,12 @@
                 const playerColor = getPlayerColor(player.userId);
                 
                 row.setAttribute('data-user-id', player.userId);
-                row.style.position = 'relative';
-                
-                // 色の帯を追加
-                const colorBar = document.createElement('div');
-                colorBar.className = 'color-bar';
-                colorBar.style.backgroundColor = playerColor;
-                row.appendChild(colorBar);
                 
                 row.innerHTML = `
-                    <td class="rank-cell rank-${player.rank}">#${player.rank}</td>
+                    <td class="rank-cell rank-${player.rank}">
+                        <div class="color-bar" style="background-color: ${playerColor};"></div>
+                        #${player.rank}
+                    </td>
                     <td class="player-name-cell">
                         ${player.username}
                     </td>
@@ -437,6 +433,11 @@
                 tableBody.appendChild(row);
             });
 
+            // // スコア更新時のパルスエフェクト
+            // tableBody.classList.add('pulse');
+            // setTimeout(() => {
+            //     tableBody.classList.remove('pulse');
+            // }, 500);
         }
 
     </script>
