@@ -82,12 +82,32 @@ class Song {
     }
 
     addScore(userId, normalScore, exScore) {
-        this.scores.set(userId, {
-            normal: normalScore,
-            ex: exScore,
-            finished: false,
-            submittedAt: new Date()
-        });
+        const existingScore = this.scores.get(userId);
+        
+        if (existingScore) {
+            // 既存スコアがある場合、より高いスコアを保持
+            const newNormalScore = Math.max(existingScore.normal, normalScore);
+            const newExScore = Math.max(existingScore.ex, exScore);
+            
+            this.scores.set(userId, {
+                normal: newNormalScore,
+                ex: newExScore,
+                finished: existingScore.finished,
+                submittedAt: new Date() // 最新の送信時刻で更新
+            });
+            
+            console.log(`Updated score for ${userId}: normal ${existingScore.normal} -> ${newNormalScore}, ex ${existingScore.ex} -> ${newExScore}`);
+        } else {
+            // 新規スコア
+            this.scores.set(userId, {
+                normal: normalScore,
+                ex: exScore,
+                finished: false,
+                submittedAt: new Date()
+            });
+            
+            console.log(`New score for ${userId}: normal ${normalScore}, ex ${exScore}`);
+        }
     }
 
     finishUser(userId) {
@@ -325,6 +345,9 @@ function batchUpdateRankings(roomId) {
         const room = rooms.get(roomId);
         if (room && room.currentSong) {
             const rankings = room.currentSong.calculateRankings(room.rule);
+            
+            console.log(`Batch ranking update for room ${roomId}:`, 
+                rankings.map(r => `${r.username}: ${r.score}`).join(', '));
             
             // 1回の通知にまとめる
             io.to(`room_${roomId}`).emit('rankingsUpdated', rankings);
@@ -769,8 +792,10 @@ io.on('connection', (socket) => {
         // 新しい曲の開始または既存曲へのスコア追加
         if (!room.currentSong) {
             room.currentSong = new Song(room.id);
+            console.log(`Started new test song in room ${room.name}`);
         }
 
+        // スコア追加（高い方を保持）
         room.currentSong.addScore(userId, data.normalScore, data.exScore);
 
         // WebSocket通知をバッチ処理で間引く
