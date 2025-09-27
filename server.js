@@ -23,6 +23,7 @@ let rooms = new Map(); // roomId -> room data
 let users = new Map(); // userId -> user data
 let socketToUser = new Map(); // socketId -> userId
 let updateTimers = new Map(); // roomId -> timer for batched updates
+let lastUpdateTime = new Map(); // roomId -> last update timestamp
 
 // 部屋のデータ構造
 class Room {
@@ -289,11 +290,12 @@ app.post('/api/rooms/:roomId/leave', (req, res) => {
     if (room.members.size === 0) {
         rooms.delete(roomId);
         
-        // タイマーもクリア
+        // タイマーとタイムスタンプもクリア
         if (updateTimers.has(roomId)) {
             clearTimeout(updateTimers.get(roomId));
             updateTimers.delete(roomId);
         }
+        lastUpdateTime.delete(roomId);
         
         io.emit('roomDeleted', roomId);
     }
@@ -333,29 +335,48 @@ app.post('/api/rooms/:roomId/score', (req, res) => {
     console.log(`Score submitted by ${user.username}: normal=${normalScore}, ex=${exScore}, rule=${room.rule}`);
 });
 
-// バッチ処理でランキング更新を間引く（200ms間隔）
+// バッチ処理でランキング更新（確実な定期更新）
 function batchUpdateRankings(roomId) {
-    // 既存のタイマーをクリア
+    const now = Date.now();
+    const lastUpdate = lastUpdateTime.get(roomId) || 0;
+    const timeSinceLastUpdate = now - lastUpdate;
+    
+    // 最後の更新から150ms以上経過している場合は即座に更新
+    if (timeSinceLastUpdate >= 150) {
+        performRankingUpdate(roomId);
+        return;
+    }
+    
+    // タイマーが既に動いている場合は何もしない
     if (updateTimers.has(roomId)) {
-        clearTimeout(updateTimers.get(roomId));
+        return;
     }
 
-    // 200ms後に更新処理を実行
+    // 残り時間後に更新を予定
+    const remainingTime = 200 - timeSinceLastUpdate;
     const timer = setTimeout(() => {
-        const room = rooms.get(roomId);
-        if (room && room.currentSong) {
-            const rankings = room.currentSong.calculateRankings(room.rule);
-            
-            console.log(`Batch ranking update for room ${roomId}:`, 
-                rankings.map(r => `${r.username}: ${r.score}`).join(', '));
-            
-            // 1回の通知にまとめる
-            io.to(`room_${roomId}`).emit('rankingsUpdated', rankings);
-        }
+        performRankingUpdate(roomId);
         updateTimers.delete(roomId);
-    }, 200);
+    }, remainingTime);
 
     updateTimers.set(roomId, timer);
+    console.log(`Scheduled ranking update for room ${roomId} in ${remainingTime}ms`);
+}
+
+// 実際のランキング更新処理
+function performRankingUpdate(roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.currentSong) {
+        const rankings = room.currentSong.calculateRankings(room.rule);
+        
+        lastUpdateTime.set(roomId, Date.now());
+        
+        console.log(`Ranking update for room ${roomId}:`, 
+            rankings.map(r => `${r.username}: ${r.score}`).join(', '));
+        
+        // WebSocket通知
+        io.to(`room_${roomId}`).emit('rankingsUpdated', rankings);
+    }
 }
 
 // 曲終了通知
@@ -730,11 +751,12 @@ io.on('connection', (socket) => {
         // 部屋を削除
         rooms.delete(room.id);
         
-        // タイマーもクリア
+        // タイマーとタイムスタンプもクリア
         if (updateTimers.has(room.id)) {
             clearTimeout(updateTimers.get(room.id));
             updateTimers.delete(room.id);
         }
+        lastUpdateTime.delete(room.id);
         
         // 部屋一覧の更新を通知
         io.emit('roomListUpdated');
@@ -798,8 +820,10 @@ io.on('connection', (socket) => {
         // スコア追加（高い方を保持）
         room.currentSong.addScore(userId, data.normalScore, data.exScore);
 
-        // WebSocket通知をバッチ処理で間引く
+        // WebSocket通知をバッチ処理（確実な定期更新）
         batchUpdateRankings(room.id);
+        
+        console.log(`Test score processed for ${user.username}: ${data.normalScore}/${data.exScore}`);
     });
 
     // テスト曲終了 (開発環境のみ)
@@ -908,11 +932,12 @@ io.on('connection', (socket) => {
                             console.log(`Deleting empty room: ${room.name}`);
                             rooms.delete(room.id);
                             
-                            // タイマーもクリア
+                            // タイマーとタイムスタンプもクリア
                             if (updateTimers.has(room.id)) {
                                 clearTimeout(updateTimers.get(room.id));
                                 updateTimers.delete(room.id);
                             }
+                            lastUpdateTime.delete(room.id);
                             
                             io.emit('roomDeleted', room.id);
                         }
