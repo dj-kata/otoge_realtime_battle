@@ -1,5 +1,6 @@
 # RestAPIのテスト
-import requests, json
+import requests, json, time
+import random
 base_url = 'https://otoge-realtime-battle.onrender.com'
 
 def login(username=None):
@@ -49,16 +50,23 @@ def finish_song(roomid=None,userid=None):
 if __name__ == "__main__":
     print("Hello from otoge-realtime-battle!")
 
-    userid = login('test4').json()['userId']
+    userid = login('ファイヤー').json()['userId']
     roomid = get_rooms(0)
-    join_room(roomid, userid)
-    send_score(roomid, userid, 10750, 3)
-    send_score(roomid, userid, 3238700, 97)
-    send_score(roomid, userid, 6784973, 2701)
-    send_score(roomid, userid, 9957009, 5797)
-    userid2 = login('ほげ').json()['userId']
+    userid2 = login('最強男').json()['userId']
     join_room(roomid, userid2)
-    send_score(roomid, userid2, 10750, 3)
-    send_score(roomid, userid2, 9947009, 5799)
-    # leave_room(roomid, userid)
-    # leave_room(roomid, userid2)
+    join_room(roomid, userid)
+    for i in range(1): # 1試合
+        for sc in range(40):
+            base = 10000000/40*sc
+            ran1 = random.randint(0, 50000)-25000
+            ran2 = random.randint(0, 50000)-25000
+            sc1 = max(min(base+ran1, 10000000), 0)
+            sc2 = max(min(base+ran2, 10000000), 0)
+            send_score(roomid, userid, sc1, 0)
+            send_score(roomid, userid2, sc2, 0)
+            time.sleep(0.01)
+        time.sleep(1)
+        finish_song(roomid, userid)
+        finish_song(roomid, userid2)
+    leave_room(roomid, userid)
+    leave_room(roomid, userid2)
