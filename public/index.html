@@ -513,16 +513,18 @@
                         <button id="becomeSpectatorBtn" class="btn btn-secondary">観戦者になる</button>
                     </div>
 
+                    <!-- 可視化ビュー（全員表示） -->
+                    <div class="flex gap-10 mb-20">
+                        <button id="openDuelVisualizerBtn" class="btn btn-small">2人対戦ビュー</button>
+                        <button id="openMultiVisualizerBtn" class="btn btn-small">多人数ビュー</button>
+                    </div>
+
                     <!-- 部屋主専用エリア -->
                     <div id="ownerControls" class="hidden">
                         <h4 class="mb-10">👑 部屋主メニュー</h4>
                         <div class="flex gap-10 mb-10">
                             <button id="resetPointsBtn" class="btn btn-secondary btn-small">ポイントリセット</button>
                             <button id="deleteRoomBtn" class="btn btn-danger btn-small">部屋削除</button>
-                        </div>
-                        <div class="flex gap-10 mb-10">
-                            <button id="openDuelVisualizerBtn" class="btn btn-small">2人対戦ビュー</button>
-                            <button id="openMultiVisualizerBtn" class="btn btn-small">多人数ビュー</button>
                         </div>
                     </div>
 
@@ -624,6 +626,8 @@
             // 部屋主機能
             document.getElementById('resetPointsBtn').addEventListener('click', resetPoints);
             document.getElementById('deleteRoomBtn').addEventListener('click', deleteRoom);
+            
+            // 可視化ビュー（全員）
             document.getElementById('openDuelVisualizerBtn').addEventListener('click', openDuelVisualizer);
             document.getElementById('openMultiVisualizerBtn').addEventListener('click', openMultiVisualizer);
 
@@ -683,6 +687,7 @@
             });
 
             socket.on('memberLeft', (data) => {
+                console.log('Member left:', data);
                 removeMemberFromList(data.userId);
             });
 

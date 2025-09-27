@@ -590,9 +590,32 @@ io.on('connection', (socket) => {
             return;
         }
 
-        if (!targetUser || targetUser.roomId !== user.roomId) {
-            console.log('Error: Target user not found in room', { targetUser: !!targetUser, targetRoomId: targetUser?.roomId, currentRoomId: user.roomId });
-            socket.emit('error', { message: 'Target user not found in room' });
+        if (!targetUser) {
+            console.log('Warning: Target user not found, removing from room member list', { targetUserId: data.targetUserId });
+            
+            // ユーザーが見つからない場合、部屋のメンバーリストから削除
+            if (room.members.has(data.targetUserId)) {
+                room.removeMember(data.targetUserId);
+                
+                // クライアントに削除を通知
+                io.to(`room_${user.roomId}`).emit('memberLeft', {
+                    userId: data.targetUserId,
+                    username: 'Unknown User'
+                });
+                
+                console.log(`Removed missing user ${data.targetUserId} from room member list`);
+            }
+            
+            socket.emit('error', { message: 'Target user not found and removed from member list' });
+            return;
+        }
+
+        if (targetUser.roomId !== user.roomId) {
+            console.log('Error: Target user not in same room', { 
+                targetRoomId: targetUser.roomId, 
+                currentRoomId: user.roomId 
+            });
+            socket.emit('error', { message: 'Target user not in same room' });
             return;
         }
 
@@ -637,8 +660,22 @@ io.on('connection', (socket) => {
         }
 
         if (!targetUser) {
-            console.log('Error: Target user not found', { targetUserId: data.targetUserId });
-            socket.emit('error', { message: 'Target user not found' });
+            console.log('Warning: Target user not found, removing from room member list', { targetUserId: data.targetUserId });
+            
+            // ユーザーが見つからない場合、部屋のメンバーリストから削除
+            if (room.members.has(data.targetUserId)) {
+                room.removeMember(data.targetUserId);
+                
+                // クライアントに削除を通知
+                io.to(`room_${room.id}`).emit('memberLeft', {
+                    userId: data.targetUserId,
+                    username: 'Unknown User'
+                });
+                
+                console.log(`Removed missing user ${data.targetUserId} from room member list`);
+            }
+            
+            socket.emit('error', { message: 'Target user not found and removed from member list' });
             return;
         }
 
