@@ -101,12 +101,22 @@
 
         .multi-table tbody tr {
             transition: all 0.3s;
+            position: relative;
         }
 
         .multi-table tbody tr:hover {
             background: #f8f9fa;
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .color-bar {
+            width: 8px;
+            height: 100%;
+            position: absolute;
+            left: 0;
+            top: 0;
+            border-radius: 0 4px 4px 0;
         }
 
         .rank-cell {
@@ -117,6 +127,8 @@
               -1px 1px 1px #000, 1px -1px 1px #000,
               1px 1px 1px #000, -1px -1px 1px #000,
               1px 1px 1px #000, 1px -1px 1px #000;
+            position: relative;
+            padding-left: 20px;
         }
 
         .rank-1 {
@@ -189,6 +201,21 @@
             animation: pulse 0.5s ease-in-out;
         }
 
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
         /* レスポンシブ対応 */
         @media (max-width: 768px) {
             .multi-table {
@@ -202,6 +229,7 @@
 
             .rank-cell {
                 font-size: 1.2rem;
+                padding-left: 15px;
             }
 
             .player-name-cell {
@@ -211,6 +239,10 @@
             .player-type-badge {
                 display: block;
                 margin: 5px 0 0 0;
+            }
+
+            .color-bar {
+                width: 6px;
             }
         }
     </style>
@@ -248,6 +280,14 @@
         // グローバル変数
         let socket;
         let currentRoom = null;
+        let playerColors = new Map(); // プレイヤーIDと色のマッピング
+        let colorPalette = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#F7DC6F', '#BB8FCE',
+            '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#F8D7DA',
+            '#D5DBDB', '#FADBD8', '#E8DAEF', '#D1F2EB', '#FCF3CF',
+            '#EBDEF0', '#D6EAF8', '#D4EDDA', '#FFF3CD', '#F8D7DA'
+        ];
+        let nextColorIndex = 0;
 
         // 初期化
         document.addEventListener('DOMContentLoaded', () => {
@@ -255,7 +295,7 @@
             const roomId = urlParams.get('room');
 
             if (!roomId) {
-                document.getElementById('status').innerHTML = '❌ 部屋IDが指定されていません';
+                document.getElementById('status').innerHTML = '⚠ 部屋IDが指定されていません';
                 return;
             }
 
@@ -294,11 +334,11 @@
 
             socket.on('error', (data) => {
                 console.error('Socket error:', data);
-                document.getElementById('status').innerHTML = `❌ エラー: ${data.message}`;
+                document.getElementById('status').innerHTML = `⚠ エラー: ${data.message}`;
             });
 
             socket.on('disconnect', () => {
-                document.getElementById('status').innerHTML = '❌ サーバーとの接続が切断されました';
+                document.getElementById('status').innerHTML = '⚠ サーバーとの接続が切断されました';
             });
         }
 
@@ -320,18 +360,28 @@
                         
                         console.log('Connected to room:', room);
                     } else {
-                        document.getElementById('status').innerHTML = '❌ 指定された部屋が見つかりません';
+                        document.getElementById('status').innerHTML = '⚠ 指定された部屋が見つかりません';
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching room info:', error);
-                    document.getElementById('status').innerHTML = '❌ 部屋情報の取得に失敗しました';
+                    document.getElementById('status').innerHTML = '⚠ 部屋情報の取得に失敗しました';
                 });
         }
 
         function updateRoomInfo(room) {
             document.getElementById('roomName').textContent = room.name;
             document.getElementById('roomRule').textContent = room.rule === 'ex' ? 'EXスコア' : '通常スコア';
+        }
+
+        function getPlayerColor(userId) {
+            if (!playerColors.has(userId)) {
+                const color = colorPalette[nextColorIndex % colorPalette.length];
+                playerColors.set(userId, color);
+                nextColorIndex++;
+                console.log(`Assigned color ${color} to player ${userId}`);
+            }
+            return playerColors.get(userId);
         }
 
         function updateMultiMode(rankings) {
@@ -349,12 +399,26 @@
 
             const topScore = apiPlayers.length > 0 ? apiPlayers[0].score : 0;
             
+            // 既存の行を保持してアニメーション処理
+            const existingRows = Array.from(tableBody.querySelectorAll('tr[data-user-id]'));
+            const existingPlayerIds = existingRows.map(row => row.getAttribute('data-user-id'));
+            
             // テーブルを一度クリアしてから再構築
             tableBody.innerHTML = '';
             
             apiPlayers.forEach((player, index) => {
                 const row = document.createElement('tr');
                 const difference = topScore - player.score;
+                const playerColor = getPlayerColor(player.userId);
+                
+                row.setAttribute('data-user-id', player.userId);
+                row.style.position = 'relative';
+                
+                // 色の帯を追加
+                const colorBar = document.createElement('div');
+                colorBar.className = 'color-bar';
+                colorBar.style.backgroundColor = playerColor;
+                row.appendChild(colorBar);
                 
                 row.innerHTML = `
                     <td class="rank-cell rank-${player.rank}">#${player.rank}</td>
@@ -365,8 +429,14 @@
                     <td class="difference-cell">${difference === 0 ? '-' : '-' + difference.toLocaleString()}</td>
                 `;
                 
+                // 新しいプレイヤーの場合はアニメーション
+                if (!existingPlayerIds.includes(player.userId)) {
+                    row.classList.add('slide-in');
+                }
+                
                 tableBody.appendChild(row);
             });
+
         }
 
     </script>
