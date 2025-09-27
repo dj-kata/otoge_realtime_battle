@@ -486,27 +486,6 @@
                         </div>
                     </div>
 
-                    <div id="currentSongArea" class="hidden">
-                        <div class="current-song">
-                            <h3>📀 現在プレイ中</h3>
-                            <p>プレイヤーのスコア待ち...</p>
-                        </div>
-                    </div>
-
-                    <div id="rankingsArea" class="rankings hidden">
-                        <h3 class="mb-10">🏆 現在のランキング</h3>
-                        <div id="rankingsList">
-                            <!-- ランキングがここに表示される -->
-                        </div>
-                    </div>
-
-                    <div id="songHistoryArea" class="hidden">
-                        <h3 class="mb-10">📚 過去の結果</h3>
-                        <div id="songHistory">
-                            <!-- 過去の結果がここに表示される -->
-                        </div>
-                    </div>
-
                     <!-- ロール切り替えボタン -->
                     <div class="flex gap-10 mb-20">
                         <button id="becomePlayerBtn" class="btn">プレイヤーになる</button>
@@ -529,6 +508,27 @@
                     </div>
 
                     <button id="leaveRoomBtn" class="btn btn-secondary full-width">部屋を出る</button>
+
+                    <div id="currentSongArea" class="hidden">
+                        <div class="current-song">
+                            <h3>📀 現在プレイ中</h3>
+                            <p>プレイヤーのスコア待ち...</p>
+                        </div>
+                    </div>
+
+                    <div id="rankingsArea" class="rankings hidden">
+                        <h3 class="mb-10">🏆 現在のランキング</h3>
+                        <div id="rankingsList">
+                            <!-- ランキングがここに表示される -->
+                        </div>
+                    </div>
+
+                    <div id="songHistoryArea" class="hidden">
+                        <h3 class="mb-10">📚 過去の結果</h3>
+                        <div id="songHistory">
+                            <!-- 過去の結果がここに表示される -->
+                        </div>
+                    </div>
 
                     <!-- テストエリア (開発環境のみ) -->
                     <div id="testArea" class="test-area hidden">
@@ -924,7 +924,7 @@
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '';
         }
-        
+
         function changeRole(role) {
             socket.emit('changeRole', { role });
         }
