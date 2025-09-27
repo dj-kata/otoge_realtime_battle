@@ -24,6 +24,10 @@
             margin: 0;
         }
 
+        #base{
+            background-color: #222;
+        }
+
         .header {
             text-align: center;
             margin-bottom: 20px;
@@ -378,28 +382,30 @@
     </script>
 </head>
 <body>
+
+    <div id="base">
+        <table width="100%">
+            <tr align="center">
+                <td width="35%" class="player1"><p1>待機中</p1></td>
+                <td width="15%"></td>
+                <td width="15%"></td>
+                <td width="35%" class="player2"><p2>待機中</p2></td>
+            </tr>
+            <tr align="center">
+                <td width="35%" class="score"><sc1>0</sc1></td>
+                <td width="15%" class="lead"><lead1></lead1></td>
+                <td width="15%" class="lead"><lead2></lead2></td>
+                <td width="35%" class="score"><sc2>0</sc2></td>
+            </tr>
+            <tr align="center">
+                <td colspan="4" class="diff"><diff>0</diff></td>
+            </tr>
+        </table>
+        <div id="chart_div"></div>
+    </div>
     <div class="header">
         <div class="room-info">部屋に接続中...</div>
         <div class="status">接続待機中...</div>
     </div>
-
-    <table width="100%">
-        <tr align="center">
-            <td width="35%" class="player1"><p1>待機中</p1></td>
-            <td width="15%"></td>
-            <td width="15%"></td>
-            <td width="35%" class="player2"><p2>待機中</p2></td>
-        </tr>
-        <tr align="center">
-            <td width="35%" class="score"><sc1>0</sc1></td>
-            <td width="15%" class="lead"><lead1></lead1></td>
-            <td width="15%" class="lead"><lead2></lead2></td>
-            <td width="35%" class="score"><sc2>0</sc2></td>
-        </tr>
-        <tr align="center">
-            <td colspan="4" class="diff"><diff>0</diff></td>
-        </tr>
-    </table>
-    <div id="chart_div"></div>
 </body>
 </html>
