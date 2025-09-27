@@ -669,10 +669,23 @@
                 currentRoom = data.room;
                 showGameScreen();
                 updateMembersList(data.members);
+    
+                // 過去の履歴をクリアしてから新しい部屋の履歴を表示
+                clearSongHistory();
+                if (data.songHistory && data.songHistory.length > 0) {
+                    data.songHistory.forEach(song => {
+                        const rankings = song.calculateRankings ? song.calculateRankings(data.room.rule) : song.rankings;
+                        if (rankings) {
+                            addSongHistory(rankings);
+                        }
+                    });
+                    document.getElementById('songHistoryArea').classList.remove('hidden');
+                }
+    
                 if (data.currentSong) {
                     showCurrentSong();
                 }
-                
+    
                 // 自分のロールをボタンに反映
                 const currentMember = data.members.find(m => m.id === currentUser.userId);
                 if (currentMember) {
@@ -849,23 +862,29 @@
             document.getElementById('gameCard').classList.remove('hidden');
             document.getElementById('membersCard').classList.remove('hidden');
             document.getElementById('chatCard').classList.remove('hidden');
-            
+
             // ロビーエリアを隠す
             document.getElementById('lobbyArea').classList.add('hidden');
-            
+
             // メイン画面のレイアウトを変更
             document.getElementById('mainScreen').classList.add('in-room');
-
+        
             // 部屋情報を表示
             document.getElementById('roomTitle').textContent = currentRoom.name;
             document.getElementById('roomRule').textContent = currentRoom.rule === 'ex' ? 'EXスコア' : '通常スコア';
-
+        
             // 部屋主かどうかをチェック
             if (currentRoom.ownerId === currentUser.userId) {
                 document.getElementById('ownerControls').classList.remove('hidden');
             } else {
                 document.getElementById('ownerControls').classList.add('hidden');
             }
+        
+            // 各エリアを初期状態にリセット
+            clearSongHistory();
+            clearRankings();
+            clearChat();
+            hideConcurrentSong();
 
             updateRoleButtons('spectator');
         }
@@ -874,16 +893,38 @@
             document.getElementById('gameCard').classList.add('hidden');
             document.getElementById('membersCard').classList.add('hidden');
             document.getElementById('chatCard').classList.add('hidden');
-            
+
             // ロビーエリアを再表示
             document.getElementById('lobbyArea').classList.remove('hidden');
-            
+
             // メイン画面のレイアウトを元に戻す
             document.getElementById('mainScreen').classList.remove('in-room');
-            
+
+            // 各エリアをクリア
+            clearSongHistory();
+            clearRankings();
+            clearChat();
+
             currentRoom = null;
         }
 
+        function clearSongHistory() {
+            const songHistory = document.getElementById('songHistory');
+            songHistory.innerHTML = '';
+            document.getElementById('songHistoryArea').classList.add('hidden');
+        }
+
+        function clearRankings() {
+            const rankingsList = document.getElementById('rankingsList');
+            rankingsList.innerHTML = '';
+            document.getElementById('rankingsArea').classList.add('hidden');
+        }
+
+        function clearChat() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+        }
+        
         function changeRole(role) {
             socket.emit('changeRole', { role });
         }
