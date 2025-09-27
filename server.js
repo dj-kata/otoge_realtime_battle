@@ -22,6 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let rooms = new Map(); // roomId -> room data
 let users = new Map(); // userId -> user data
 let socketToUser = new Map(); // socketId -> userId
+let updateTimers = new Map(); // roomId -> timer for batched updates
 
 // 部屋のデータ構造
 class Room {
@@ -267,6 +268,13 @@ app.post('/api/rooms/:roomId/leave', (req, res) => {
     // 部屋が空の場合は削除
     if (room.members.size === 0) {
         rooms.delete(roomId);
+        
+        // タイマーもクリア
+        if (updateTimers.has(roomId)) {
+            clearTimeout(updateTimers.get(roomId));
+            updateTimers.delete(roomId);
+        }
+        
         io.emit('roomDeleted', roomId);
     }
 
@@ -296,25 +304,36 @@ app.post('/api/rooms/:roomId/score', (req, res) => {
 
     room.currentSong.addScore(userId, normalScore, exScore);
 
-    // 現在のランキングを計算
-    const rankings = room.currentSong.calculateRankings(room.rule);
+    // 即座にレスポンスを返す（軽量化）
+    res.json({ success: true });
 
-    // WebSocketクライアントに通知
-    io.to(`room_${roomId}`).emit('scoreUpdated', {
-        userId: userId,
-        username: user.username,
-        normalScore: normalScore,
-        exScore: exScore,
-        rule: room.rule
-    });
-
-    // ランキング更新を送信
-    io.to(`room_${roomId}`).emit('rankingsUpdated', rankings);
+    // WebSocket通知をバッチ処理で間引く
+    batchUpdateRankings(roomId);
 
     console.log(`Score submitted by ${user.username}: normal=${normalScore}, ex=${exScore}, rule=${room.rule}`);
-
-    res.json({ success: true });
 });
+
+// バッチ処理でランキング更新を間引く（200ms間隔）
+function batchUpdateRankings(roomId) {
+    // 既存のタイマーをクリア
+    if (updateTimers.has(roomId)) {
+        clearTimeout(updateTimers.get(roomId));
+    }
+
+    // 200ms後に更新処理を実行
+    const timer = setTimeout(() => {
+        const room = rooms.get(roomId);
+        if (room && room.currentSong) {
+            const rankings = room.currentSong.calculateRankings(room.rule);
+            
+            // 1回の通知にまとめる
+            io.to(`room_${roomId}`).emit('rankingsUpdated', rankings);
+        }
+        updateTimers.delete(roomId);
+    }, 200);
+
+    updateTimers.set(roomId, timer);
+}
 
 // 曲終了通知
 app.post('/api/rooms/:roomId/finish', (req, res) => {
@@ -334,38 +353,42 @@ app.post('/api/rooms/:roomId/finish', (req, res) => {
 
     room.currentSong.finishUser(userId);
 
-    // WebSocketクライアントに通知
-    io.to(`room_${roomId}`).emit('userFinished', {
-        userId: userId,
-        username: user.username
-    });
-
-    // 全プレイヤーが終了したかチェック
-    if (room.currentSong.isAllPlayersFinished(room)) {
-        const rankings = room.currentSong.calculateRankings(room.rule);
-        
-        // ポイント付与 (1位: 2pt, 2位: 1pt)
-        if (rankings.length >= 1) {
-            const firstPlace = users.get(rankings[0].userId);
-            if (firstPlace) firstPlace.points += 2;
-        }
-        if (rankings.length >= 2) {
-            const secondPlace = users.get(rankings[1].userId);
-            if (secondPlace) secondPlace.points += 1;
-        }
-
-        room.currentSong.finishedAt = new Date();
-        room.songHistory.push(room.currentSong);
-        room.currentSong = null;
-
-        // 最終結果を送信
-        io.to(`room_${roomId}`).emit('songFinished', {
-            rankings: rankings,
-            members: room.getMemberList()
-        });
-    }
-
+    // 即座にレスポンスを返す
     res.json({ success: true });
+
+    // 非同期で後続処理を実行
+    setImmediate(() => {
+        // WebSocketクライアントに通知
+        io.to(`room_${roomId}`).emit('userFinished', {
+            userId: userId,
+            username: user.username
+        });
+
+        // 全プレイヤーが終了したかチェック
+        if (room.currentSong.isAllPlayersFinished(room)) {
+            const rankings = room.currentSong.calculateRankings(room.rule);
+            
+            // ポイント付与 (1位: 2pt, 2位: 1pt)
+            if (rankings.length >= 1) {
+                const firstPlace = users.get(rankings[0].userId);
+                if (firstPlace) firstPlace.points += 2;
+            }
+            if (rankings.length >= 2) {
+                const secondPlace = users.get(rankings[1].userId);
+                if (secondPlace) secondPlace.points += 1;
+            }
+
+            room.currentSong.finishedAt = new Date();
+            room.songHistory.push(room.currentSong);
+            room.currentSong = null;
+
+            // 最終結果を送信
+            io.to(`room_${roomId}`).emit('songFinished', {
+                rankings: rankings,
+                members: room.getMemberList()
+            });
+        }
+    });
 });
 
 // WebSocket接続処理
@@ -684,6 +707,12 @@ io.on('connection', (socket) => {
         // 部屋を削除
         rooms.delete(room.id);
         
+        // タイマーもクリア
+        if (updateTimers.has(room.id)) {
+            clearTimeout(updateTimers.get(room.id));
+            updateTimers.delete(room.id);
+        }
+        
         // 部屋一覧の更新を通知
         io.emit('roomListUpdated');
         
@@ -744,18 +773,8 @@ io.on('connection', (socket) => {
 
         room.currentSong.addScore(userId, data.normalScore, data.exScore);
 
-        // WebSocketクライアントに通知
-        io.to(`room_${room.id}`).emit('scoreUpdated', {
-            userId: userId,
-            username: user.username,
-            normalScore: data.normalScore,
-            exScore: data.exScore,
-            rule: room.rule
-        });
-
-        // 現在のランキングを計算して送信
-        const rankings = room.currentSong.calculateRankings(room.rule);
-        io.to(`room_${room.id}`).emit('rankingsUpdated', rankings);
+        // WebSocket通知をバッチ処理で間引く
+        batchUpdateRankings(room.id);
     });
 
     // テスト曲終了 (開発環境のみ)
@@ -781,34 +800,37 @@ io.on('connection', (socket) => {
 
         room.currentSong.finishUser(userId);
 
-        io.to(`room_${room.id}`).emit('userFinished', {
-            userId: userId,
-            username: user.username
-        });
-
-        // 全プレイヤーが終了したかチェック
-        if (room.currentSong.isAllPlayersFinished(room)) {
-            const rankings = room.currentSong.calculateRankings(room.rule);
-            
-            // ポイント付与
-            if (rankings.length >= 1) {
-                const firstPlace = users.get(rankings[0].userId);
-                if (firstPlace) firstPlace.points += 2;
-            }
-            if (rankings.length >= 2) {
-                const secondPlace = users.get(rankings[1].userId);
-                if (secondPlace) secondPlace.points += 1;
-            }
-
-            room.currentSong.finishedAt = new Date();
-            room.songHistory.push(room.currentSong);
-            room.currentSong = null;
-
-            io.to(`room_${room.id}`).emit('songFinished', {
-                rankings: rankings,
-                members: room.getMemberList()
+        // 非同期で後続処理を実行
+        setImmediate(() => {
+            io.to(`room_${room.id}`).emit('userFinished', {
+                userId: userId,
+                username: user.username
             });
-        }
+
+            // 全プレイヤーが終了したかチェック
+            if (room.currentSong.isAllPlayersFinished(room)) {
+                const rankings = room.currentSong.calculateRankings(room.rule);
+                
+                // ポイント付与
+                if (rankings.length >= 1) {
+                    const firstPlace = users.get(rankings[0].userId);
+                    if (firstPlace) firstPlace.points += 2;
+                }
+                if (rankings.length >= 2) {
+                    const secondPlace = users.get(rankings[1].userId);
+                    if (secondPlace) secondPlace.points += 1;
+                }
+
+                room.currentSong.finishedAt = new Date();
+                room.songHistory.push(room.currentSong);
+                room.currentSong = null;
+
+                io.to(`room_${room.id}`).emit('songFinished', {
+                    rankings: rankings,
+                    members: room.getMemberList()
+                });
+            }
+        });
     });
 
     // 可視化画面のための部屋監視
@@ -860,6 +882,13 @@ io.on('connection', (socket) => {
                         if (room.members.size === 0) {
                             console.log(`Deleting empty room: ${room.name}`);
                             rooms.delete(room.id);
+                            
+                            // タイマーもクリア
+                            if (updateTimers.has(room.id)) {
+                                clearTimeout(updateTimers.get(room.id));
+                                updateTimers.delete(room.id);
+                            }
+                            
                             io.emit('roomDeleted', room.id);
                         }
                     }
