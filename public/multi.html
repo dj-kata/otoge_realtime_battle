@@ -191,11 +191,6 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>👥 多人数ビュー</h1>
-            <p>リアルタイムランキング表示</p>
-        </div>
-
         <div class="visualizer-container">
             <div class="room-info">
                 <div id="roomName" class="room-name">部屋に接続中...</div>
@@ -263,7 +258,6 @@
 
             socket.on('scoreUpdated', (data) => {
                 console.log('Score updated:', data);
-                addScoreUpdateEffect();
             });
 
             socket.on('songFinished', (data) => {
@@ -351,14 +345,6 @@
             });
         }
 
-        function addScoreUpdateEffect() {
-            const container = document.querySelector('.visualizer-container');
-            container.classList.add('pulse');
-            
-            setTimeout(() => {
-                container.classList.remove('pulse');
-            }, 500);
-        }
     </script>
 </body>
 </html>
