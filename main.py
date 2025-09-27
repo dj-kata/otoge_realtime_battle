@@ -57,12 +57,14 @@ if __name__ == "__main__":
     print("Hello from otoge-realtime-battle!")
     threads = []
 
-    userid = login('ファイヤー').json()['userId']
+    userid = login('フリーザー').json()['userId']
     roomid = get_rooms(0)
-    userid2 = login('最強男').json()['userId']
+    userid2 = login('ポッポ').json()['userId']
     join_room(roomid, userid2)
     join_room(roomid, userid)
     NUM=72
+    ex0 = 0
+    ex1 = 0
     for i in range(1): # 1試合
         for sc in range(NUM):
             base = int(10000000/NUM*sc)
@@ -70,10 +72,12 @@ if __name__ == "__main__":
             ran2 = random.randint(0, 50000)-25000
             sc1 = max(min(base+ran1, 10000000), 0)
             sc2 = max(min(base+ran2, 10000000), 0)
+            ex0 += random.randint(NUM//3,NUM)
+            ex1 += random.randint(NUM//3,NUM)
             t1 = threading.Thread(target=send_score_thread,
-                                  args=(roomid, userid, sc1, 0))
+                                  args=(roomid, userid, sc1, ex0))
             t2 = threading.Thread(target=send_score_thread,
-                                  args=(roomid, userid2, sc2, 0))
+                                  args=(roomid, userid2, sc2, ex1))
             threads.append(t1)
             threads.append(t2)
             t1.start()
