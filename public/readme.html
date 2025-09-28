@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDVX Helper Realtime Battle - ドキュメント</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .back-link {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .content {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section h2 {
+            color: #667eea;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .section h3 {
+            color: #495057;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            margin-top: 25px;
+        }
+
+        .section h3:first-of-type {
+            margin-top: 0;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            background: #f8f9fa;
+            margin-bottom: 8px;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-in-progress {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-planned {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .step-list {
+            counter-reset: step-counter;
+            list-style: none;
+            padding: 0;
+        }
+
+        .step-list li {
+            counter-increment: step-counter;
+            background: #f8f9fa;
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            position: relative;
+            padding-left: 60px;
+        }
+
+        .step-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 15px;
+            top: 15px;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .info-box.warning {
+            background: #fff3e0;
+            border-color: #ffcc02;
+        }
+
+        .info-box.tip {
+            background: #e8f5e8;
+            border-color: #4caf50;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .table th,
+        .table td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .content {
+                padding: 25px;
+            }
+
+            .section h2 {
+                font-size: 1.5rem;
+            }
+
+            .step-list li {
+                padding-left: 50px;
+            }
+
+            .step-list li::before {
+                width: 25px;
+                height: 25px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-link">← メインページに戻る</a>
+            <h1>SDVX Helper Realtime Battle</h1>
+            <p>リアルタイム対戦システム ドキュメント</p>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>本システムについて</h2>
+
+            </div>
+
+            <!-- 開発状況セクション -->
+            <div class="section">
+                <h2>🚀 現在の開発状況</h2>
+                
+                <h3>実装済み機能</h3>
+                <ul class="feature-list">
+                    <li>
+                        リアルタイムスコア集計・ランキング表示
+                        <span class="status-badge status-completed">完了</span>
+                    </li>
+                    <li>
+                        部屋作成・参加システム（パスワード保護対応）
+                        <span class="status-badge status-completed">完了</span>
+                    </li>
+                    <li>
+                        2人対戦ビュー（BPL風デザイン）
+                        <span class="status-badge status-completed">完了</span>
+                    </li>
+                    <li>
+                        多人数ランキング形式ビュー
+                        <span class="status-badge status-completed">完了</span>
+                    </li>
+                    <li>
+                        管理者権限による部屋削除機能
+                        <span class="status-badge status-completed">完了</span>
+                    </li>
+                    <li>
+                        チャット機能
+                        <span class="status-badge status-completed">完了</span>
+                    </li>
+                </ul>
+
+                <!-- <h3>開発中の機能</h3> -->
+                <!-- <ul class="feature-list"> -->
+                    <!-- <li> -->
+                        <!-- [開発中の機能1の説明] -->
+                        <!-- <span class="status-badge status-in-progress">開発中</span> -->
+                    <!-- </li> -->
+                    <!-- <li> -->
+                        <!-- [開発中の機能2の説明] -->
+                        <!-- <span class="status-badge status-in-progress">開発中</span> -->
+                    <!-- </li> -->
+                <!-- </ul> -->
+
+                <h3>今後の予定</h3>
+                <ul class="feature-list">
+                    <li>
+                        疎通確認
+                        <span class="status-badge status-planned">予定</span>
+                    </li>
+                    <li>
+                        負荷試験
+                        <span class="status-badge status-planned">予定</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- クライアントアプリセクション -->
+            <div class="section">
+                <h2>📱 クライアントアプリのインストール方法</h2>
+
+                <div class="info-box">
+                    <strong>注意:</strong> クライアントアプリの詳細な情報については、[適切なリンクまたは説明を追加してください]
+                </div>
+
+                <h3>システム要件</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>項目</th>
+                            <th>要件</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>OS</td>
+                            <td>[対応OSを記載]</td>
+                        </tr>
+                        <tr>
+                            <td>メモリ</td>
+                            <td>[必要メモリ容量を記載]</td>
+                        </tr>
+                        <tr>
+                            <td>その他</td>
+                            <td>[その他の要件を記載]</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>インストール手順</h3>
+                <ol class="step-list">
+                    <li>
+                        <strong>[手順1のタイトル]</strong><br>
+                        [手順1の詳細説明をここに記載]
+                    </li>
+                    <li>
+                        <strong>[手順2のタイトル]</strong><br>
+                        [手順2の詳細説明をここに記載]
+                        <div class="code-block">
+                            [必要に応じてコマンド例などを記載]
+                        </div>
+                    </li>
+                    <li>
+                        <strong>[手順3のタイトル]</strong><br>
+                        [手順3の詳細説明をここに記載]
+                    </li>
+                </ol>
+
+                <div class="info-box tip">
+                    <strong>ヒント:</strong> [インストールに関する補足情報やトラブルシューティングのヒントを記載]
+                </div>
+            </div>
+
+            <!-- 使い方セクション -->
+            <div class="section">
+                <h2>📖 サイトの使い方</h2>
+
+                <h3>基本的な流れ</h3>
+                <ol class="step-list">
+                    <li>
+                        <strong>ユーザー登録・ログイン</strong><br>
+                        [ログイン方法の説明を記載]
+                    </li>
+                    <li>
+                        <strong>部屋の作成または参加</strong><br>
+                        [部屋の作成・参加方法の説明を記載]
+                    </li>
+                    <li>
+                        <strong>ロール選択</strong><br>
+                        [プレイヤー・観戦者の選択方法を記載]
+                    </li>
+                    <li>
+                        <strong>スコア送信・ランキング確認</strong><br>
+                        [スコア送信とランキング表示の説明を記載]
+                    </li>
+                </ol>
+
+                <h3>各機能の詳細</h3>
+
+                <h4>部屋管理</h4>
+                <p>[部屋の作成、設定、管理方法について詳しく説明]</p>
+
+                <h4>スコア送信</h4>
+                <p>[クライアントアプリからのスコア送信方法について説明]</p>
+                
+                <div class="code-block">
+                    [APIエンドポイントの例]
+                    POST /api/rooms/{roomId}/score
+                    {
+                        "userId": "user-id",
+                        "normalScore": 9500000,
+                        "exScore": 1500
+                    }
+                </div>
+
+                <h4>可視化ビュー</h4>
+                <ul>
+                    <li><strong>2人対戦ビュー:</strong> [2人対戦ビューの使い方説明]</li>
+                    <li><strong>多人数ビュー:</strong> [多人数ビューの使い方説明]</li>
+                </ul>
+
+                <h4>管理者機能</h4>
+                <div class="info-box warning">
+                    <strong>管理者限定:</strong> 部屋の削除には管理者パスワードが必要です。
+                </div>
+                <p>[管理者機能の使い方について説明]</p>
+            </div>
+
+            <!-- APIリファレンス（必要に応じて） -->
+            <div class="section">
+                <h2>🔧 API リファレンス</h2>
+                
+                <h3>主要エンドポイント</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>メソッド</th>
+                            <th>エンドポイント</th>
+                            <th>説明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/connect</td>
+                            <td>ユーザー接続</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/rooms</td>
+                            <td>部屋作成</td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td>/api/rooms</td>
+                            <td>部屋一覧取得</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/rooms/{roomId}/join</td>
+                            <td>部屋参加</td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td>/api/rooms/{roomId}/score</td>
+                            <td>スコア送信</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p>[各エンドポイントの詳細仕様については、別途APIドキュメントを参照]</p>
+            </div>
+
+            <!-- お問い合わせ・サポート -->
+            <div class="section">
+                <h2>💬 お問い合わせ・サポート</h2>
+                
+                <h3>よくある質問</h3>
+                <div style="margin-bottom: 20px;">
+                    <strong>Q: [よくある質問1]</strong><br>
+                    A: [回答1]
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <strong>Q: [よくある質問2]</strong><br>
+                    A: [回答2]
+                </div>
+
+                <h3>サポート連絡先</h3>
+                <p>[サポートの連絡方法について記載]</p>
+
+                <h3>GitHub・ソースコード</h3>
+                <p>[GitHubリポジトリのリンクなど、該当する場合]</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
