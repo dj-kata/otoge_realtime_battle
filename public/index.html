@@ -503,7 +503,6 @@
                         <h4 class="mb-10">👑 部屋主メニュー</h4>
                         <div class="flex gap-10 mb-10">
                             <button id="resetPointsBtn" class="btn btn-secondary btn-small">ポイントリセット</button>
-                            <button id="deleteRoomBtn" class="btn btn-danger btn-small">部屋削除</button>
                         </div>
                     </div>
 
@@ -625,7 +624,6 @@
 
             // 部屋主機能
             document.getElementById('resetPointsBtn').addEventListener('click', resetPoints);
-            document.getElementById('deleteRoomBtn').addEventListener('click', deleteRoom);
             
             // 可視化ビュー（全員）
             document.getElementById('openDuelVisualizerBtn').addEventListener('click', openDuelVisualizer);
@@ -957,12 +955,6 @@
         function resetPoints() {
             if (confirm('全員のポイントをリセットしますか？')) {
                 socket.emit('resetPoints');
-            }
-        }
-
-        function deleteRoom() {
-            if (confirm('部屋を削除しますか？この操作は取り消せません。')) {
-                socket.emit('deleteRoom');
             }
         }
 

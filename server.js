@@ -13,6 +13,8 @@ const io = socketIo(server, {
         methods: ["GET", "POST"]
     }
 });
+// 管理者パスワードの設定（環境変数または固定値）
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // 本番環境では環境変数を使用
 
 app.use(cors());
 app.use(express.json());
@@ -286,19 +288,8 @@ app.post('/api/rooms/:roomId/leave', (req, res) => {
         username: user.username
     });
 
-    // 部屋が空の場合は削除
-    if (room.members.size === 0) {
-        rooms.delete(roomId);
-        
-        // タイマーとタイムスタンプもクリア
-        if (updateTimers.has(roomId)) {
-            clearTimeout(updateTimers.get(roomId));
-            updateTimers.delete(roomId);
-        }
-        lastUpdateTime.delete(roomId);
-        
-        io.emit('roomDeleted', roomId);
-    }
+    // 自動削除は行わない
+    console.log(`User ${user.username} left room ${room.name}. Room members: ${room.members.size}`);
 
     res.json({ success: true });
 });
@@ -333,6 +324,68 @@ app.post('/api/rooms/:roomId/score', (req, res) => {
     batchUpdateRankings(roomId);
 
     console.log(`Score submitted by ${user.username}: normal=${normalScore}, ex=${exScore}, rule=${room.rule}`);
+});
+
+// 管理者による部屋削除API
+app.post('/api/admin/rooms/:roomId/delete', (req, res) => {
+    const { roomId } = req.params;
+    const { adminPassword } = req.body;
+
+    // 管理者パスワードチェック
+    if (adminPassword !== ADMIN_PASSWORD) {
+        return res.status(403).json({ error: 'Invalid admin password' });
+    }
+
+    const room = rooms.get(roomId);
+    if (!room) {
+        return res.status(404).json({ error: 'Room not found' });
+    }
+
+    console.log(`Admin deleting room ${room.name}`);
+
+    // 全メンバーを退出させる（部屋主を含む）
+    const memberIds = Array.from(room.members);
+    memberIds.forEach(memberId => {
+        const member = users.get(memberId);
+        if (member) {
+            // メンバーの状態をリセット
+            member.roomId = null;
+            member.role = 'spectator';
+            
+            // WebSocketがある場合は部屋から退出
+            if (member.socketId) {
+                const memberSocket = io.sockets.sockets.get(member.socketId);
+                if (memberSocket) {
+                    memberSocket.leave(`room_${room.id}`);
+                }
+            }
+            
+            console.log(`Removed member ${member.username} from deleted room`);
+        }
+    });
+
+    // 部屋のメンバーリストをクリア
+    room.members.clear();
+
+    // 部屋削除の通知を送信
+    io.to(`room_${room.id}`).emit('roomDeleted');
+    
+    // 部屋を削除
+    rooms.delete(room.id);
+    
+    // タイマーとタイムスタンプもクリア
+    if (updateTimers.has(room.id)) {
+        clearTimeout(updateTimers.get(room.id));
+        updateTimers.delete(room.id);
+    }
+    lastUpdateTime.delete(room.id);
+    
+    // 部屋一覧の更新を通知
+    io.emit('roomListUpdated');
+    
+    console.log(`Room ${room.name} deleted by admin`);
+
+    res.json({ success: true });
 });
 
 // バッチ処理でランキング更新（確実な定期更新）
@@ -740,67 +793,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // 部屋削除 (部屋主のみ)
-    socket.on('deleteRoom', () => {
-        const userId = socketToUser.get(socket.id);
-        const user = users.get(userId);
-
-        if (!user || !user.roomId) {
-            socket.emit('error', { message: 'User not in room' });
-            return;
-        }
-
-        const room = rooms.get(user.roomId);
-        if (!room || room.ownerId !== userId) {
-            socket.emit('error', { message: 'Permission denied' });
-            return;
-        }
-
-        console.log(`Deleting room ${room.name} by ${user.username}`);
-
-        // 全メンバーを退出させる（部屋主を含む）
-        const memberIds = Array.from(room.members);
-        memberIds.forEach(memberId => {
-            const member = users.get(memberId);
-            if (member) {
-                // メンバーの状態をリセット
-                member.roomId = null;
-                member.role = 'spectator';
-                
-                // WebSocketがある場合は部屋から退出
-                if (member.socketId) {
-                    const memberSocket = io.sockets.sockets.get(member.socketId);
-                    if (memberSocket) {
-                        memberSocket.leave(`room_${room.id}`);
-                    }
-                }
-                
-                console.log(`Removed member ${member.username} from deleted room`);
-            }
-        });
-
-        // 部屋のメンバーリストをクリア
-        room.members.clear();
-
-        // 部屋削除の通知を送信
-        io.to(`room_${room.id}`).emit('roomDeleted');
-        
-        // 部屋を削除
-        rooms.delete(room.id);
-        
-        // タイマーとタイムスタンプもクリア
-        if (updateTimers.has(room.id)) {
-            clearTimeout(updateTimers.get(room.id));
-            updateTimers.delete(room.id);
-        }
-        lastUpdateTime.delete(room.id);
-        
-        // 部屋一覧の更新を通知
-        io.emit('roomListUpdated');
-        
-        console.log(`Room ${room.name} deleted successfully`);
-    });
-
     // チャット送信
     socket.on('sendMessage', (data) => {
         const userId = socketToUser.get(socket.id);
@@ -948,7 +940,7 @@ io.on('connection', (socket) => {
             if (user) {
                 user.isOnline = false;
                 user.socketId = null;
-
+            
                 if (user.roomId) {
                     const room = rooms.get(user.roomId);
                     if (room) {
@@ -958,26 +950,14 @@ io.on('connection', (socket) => {
                         if (user.type === 'web') {
                             users.delete(userId);
                         }
-
+                    
                         io.to(`room_${user.roomId}`).emit('memberLeft', {
                             userId: userId,
                             username: user.username
                         });
-
-                        // 部屋が空の場合は削除
-                        if (room.members.size === 0) {
-                            console.log(`Deleting empty room: ${room.name}`);
-                            rooms.delete(room.id);
-                            
-                            // タイマーとタイムスタンプもクリア
-                            if (updateTimers.has(room.id)) {
-                                clearTimeout(updateTimers.get(room.id));
-                                updateTimers.delete(room.id);
-                            }
-                            lastUpdateTime.delete(room.id);
-                            
-                            io.emit('roomDeleted', room.id);
-                        }
+                    
+                        // 自動削除は行わない（管理者削除のみ）
+                        console.log(`User ${user.username} left room ${room.name}. Room members: ${room.members.size}`);
                     }
                 }
                 
