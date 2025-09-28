@@ -420,6 +420,45 @@
                 grid-template-columns: 1fr;
             }
         }
+        .room-item {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .room-item:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .room-delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        
+        .room-delete-btn:hover {
+            opacity: 1;
+        }
+        
+        .room-content {
+            margin-right: 60px; /* 削除ボタンのスペースを確保 */
+        }
     </style>
 </head>
 <body>
@@ -581,6 +620,24 @@
             <div class="flex gap-10">
                 <button id="cancelJoinBtn" class="btn btn-secondary" style="flex: 1;">キャンセル</button>
                 <button id="confirmJoinBtn" class="btn" style="flex: 1;">入室</button>
+            </div>
+        </div>
+    </div>
+    <!-- 管理者削除モーダル -->
+    <div id="adminDeleteModal" class="modal hidden">
+        <div class="modal-content">
+            <h3 class="text-center mb-20">🛡️ 管理者権限が必要です</h3>
+            <p class="text-center mb-20" style="color: #6c757d;">この部屋を削除するには管理者パスワードが必要です</p>
+            <div class="mb-10">
+                <strong>削除対象：</strong><span id="deleteTargetRoomName"></span>
+            </div>
+            <div class="input-group">
+                <label for="adminPasswordInput">管理者パスワード</label>
+                <input type="password" id="adminPasswordInput" placeholder="管理者パスワードを入力">
+            </div>
+            <div class="flex gap-10">
+                <button id="cancelAdminDeleteBtn" class="btn btn-secondary" style="flex: 1;">キャンセル</button>
+                <button id="confirmAdminDeleteBtn" class="btn btn-danger" style="flex: 1;">削除実行</button>
             </div>
         </div>
     </div>
