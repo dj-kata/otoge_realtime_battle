@@ -147,12 +147,17 @@
             margin-bottom: 10px;
             cursor: pointer;
             transition: all 0.3s;
+            position: relative;
         }
 
         .room-item:hover {
             border-color: #667eea;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .room-content {
+            margin-right: 60px; /* 削除ボタンのスペースを確保 */
         }
 
         .room-name {
@@ -176,6 +181,25 @@
             border-radius: 12px;
             font-size: 12px;
             font-weight: 600;
+        }
+
+        .room-delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .room-delete-btn:hover {
+            opacity: 1;
         }
 
         /* ゲーム画面 */
@@ -254,7 +278,7 @@
             align-items: center;
             gap: 8px;
             flex: 1;
-            min-width: 0; /* flexアイテムがあふれを処理できるように */
+            min-width: 0;
         }
 
         .member-info span {
@@ -419,45 +443,15 @@
             .main-screen {
                 grid-template-columns: 1fr;
             }
-        }
-        .room-item {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-            position: relative;
-        }
-        
-        .room-item:hover {
-            border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        
-        .room-delete-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 12px;
-            cursor: pointer;
-            opacity: 0.7;
-            transition: opacity 0.2s;
-        }
-        
-        .room-delete-btn:hover {
-            opacity: 1;
-        }
-        
-        .room-content {
-            margin-right: 60px; /* 削除ボタンのスペースを確保 */
+
+            .room-content {
+                margin-right: 50px;
+            }
+
+            .room-delete-btn {
+                padding: 3px 6px;
+                font-size: 10px;
+            }
         }
     </style>
 </head>
@@ -525,6 +519,27 @@
                         </div>
                     </div>
 
+                    <div id="currentSongArea" class="hidden">
+                        <div class="current-song">
+                            <h3>🎵 現在プレイ中</h3>
+                            <p>プレイヤーのスコア待ち...</p>
+                        </div>
+                    </div>
+
+                    <div id="rankingsArea" class="rankings hidden">
+                        <h3 class="mb-10">🏆 現在のランキング</h3>
+                        <div id="rankingsList">
+                            <!-- ランキングがここに表示される -->
+                        </div>
+                    </div>
+
+                    <div id="songHistoryArea" class="hidden">
+                        <h3 class="mb-10">📚 過去の結果</h3>
+                        <div id="songHistory">
+                            <!-- 過去の結果がここに表示される -->
+                        </div>
+                    </div>
+
                     <!-- ロール切り替えボタン -->
                     <div class="flex gap-10 mb-20">
                         <button id="becomePlayerBtn" class="btn">プレイヤーになる</button>
@@ -546,27 +561,6 @@
                     </div>
 
                     <button id="leaveRoomBtn" class="btn btn-secondary full-width">部屋を出る</button>
-
-                    <div id="currentSongArea" class="hidden">
-                        <div class="current-song">
-                            <h3>📀 現在プレイ中</h3>
-                            <p>プレイヤーのスコア待ち...</p>
-                        </div>
-                    </div>
-
-                    <div id="rankingsArea" class="rankings hidden">
-                        <h3 class="mb-10">🏆 現在のランキング</h3>
-                        <div id="rankingsList">
-                            <!-- ランキングがここに表示される -->
-                        </div>
-                    </div>
-
-                    <div id="songHistoryArea" class="hidden">
-                        <h3 class="mb-10">📚 過去の結果</h3>
-                        <div id="songHistory">
-                            <!-- 過去の結果がここに表示される -->
-                        </div>
-                    </div>
 
                     <!-- テストエリア (開発環境のみ) -->
                     <div id="testArea" class="test-area hidden">
@@ -623,6 +617,7 @@
             </div>
         </div>
     </div>
+
     <!-- 管理者削除モーダル -->
     <div id="adminDeleteModal" class="modal hidden">
         <div class="modal-content">
@@ -648,6 +643,7 @@
         let currentUser = null;
         let currentRoom = null;
         let joinRoomId = null;
+        let deleteTargetRoomId = null;
 
         // 初期化
         document.addEventListener('DOMContentLoaded', () => {
@@ -699,6 +695,13 @@
                 if (e.key === 'Enter') joinRoomWithPassword();
             });
 
+            // 管理者削除モーダル
+            document.getElementById('cancelAdminDeleteBtn').addEventListener('click', hideAdminDeleteModal);
+            document.getElementById('confirmAdminDeleteBtn').addEventListener('click', executeAdminDelete);
+            document.getElementById('adminPasswordInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') executeAdminDelete();
+            });
+
             // テスト機能
             document.getElementById('sendTestScoreBtn').addEventListener('click', sendTestScore);
             document.getElementById('finishTestSongBtn').addEventListener('click', finishTestSong);
@@ -724,7 +727,7 @@
                 currentRoom = data.room;
                 showGameScreen();
                 updateMembersList(data.members);
-    
+                
                 // 過去の履歴をクリアしてから新しい部屋の履歴を表示
                 clearSongHistory();
                 if (data.songHistory && data.songHistory.length > 0) {
@@ -736,11 +739,11 @@
                     });
                     document.getElementById('songHistoryArea').classList.remove('hidden');
                 }
-    
+                
                 if (data.currentSong) {
                     showCurrentSong();
                 }
-    
+                
                 // 自分のロールをボタンに反映
                 const currentMember = data.members.find(m => m.id === currentUser.userId);
                 if (currentMember) {
@@ -777,7 +780,6 @@
 
             socket.on('scoreUpdated', (data) => {
                 console.log('Score updated:', data);
-                // スコア更新を視覚的に表示（必要に応じて）
             });
 
             socket.on('rankingsUpdated', (rankings) => {
@@ -785,7 +787,6 @@
             });
 
             socket.on('userFinished', (data) => {
-                // ユーザー終了の処理
                 console.log('User finished:', data);
             });
 
@@ -873,14 +874,25 @@
         function createRoomElement(room) {
             const div = document.createElement('div');
             div.className = 'room-item';
-            div.onclick = () => joinRoom(room.id, room.hasPassword);
+            
+            // 部屋の内容部分をクリックで入室
+            div.onclick = (e) => {
+                // 削除ボタンがクリックされた場合は入室処理をスキップ
+                if (e.target.classList.contains('room-delete-btn')) {
+                    return;
+                }
+                joinRoom(room.id, room.hasPassword);
+            };
 
             div.innerHTML = `
-                <div class="room-name">${room.name}</div>
-                <div class="room-info">
-                    <span class="room-rule">${room.rule === 'ex' ? 'EXスコア' : '通常スコア'}</span>
-                    <span>${room.memberCount}人 ${room.hasPassword ? '🔒' : ''}</span>
+                <div class="room-content">
+                    <div class="room-name">${room.name}</div>
+                    <div class="room-info">
+                        <span class="room-rule">${room.rule === 'ex' ? 'EXスコア' : '通常スコア'}</span>
+                        <span>${room.memberCount}人 ${room.hasPassword ? '🔒' : ''}</span>
+                    </div>
                 </div>
+                <button class="room-delete-btn" onclick="showAdminDeleteModal('${room.id}', '${room.name}')" title="管理者削除">🗑️</button>
             `;
 
             return div;
@@ -913,34 +925,94 @@
             hidePasswordModal();
         }
 
+        function showAdminDeleteModal(roomId, roomName) {
+            deleteTargetRoomId = roomId;
+            document.getElementById('deleteTargetRoomName').textContent = roomName;
+            document.getElementById('adminDeleteModal').classList.remove('hidden');
+            document.getElementById('adminPasswordInput').focus();
+        }
+
+        function hideAdminDeleteModal() {
+            document.getElementById('adminDeleteModal').classList.add('hidden');
+            document.getElementById('adminPasswordInput').value = '';
+            deleteTargetRoomId = null;
+        }
+
+        function executeAdminDelete() {
+            const adminPassword = document.getElementById('adminPasswordInput').value;
+            
+            if (!adminPassword) {
+                alert('管理者パスワードを入力してください');
+                return;
+            }
+
+            if (!deleteTargetRoomId) {
+                alert('削除対象の部屋が見つかりません');
+                hideAdminDeleteModal();
+                return;
+            }
+
+            const roomName = document.getElementById('deleteTargetRoomName').textContent;
+            
+            // 確認ダイアログ
+            if (!confirm(`部屋「${roomName}」を削除しますか？\nこの操作は取り消せません。`)) {
+                return;
+            }
+
+            // 管理者削除API呼び出し
+            fetch(`/api/admin/rooms/${deleteTargetRoomId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    adminPassword: adminPassword
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('部屋が削除されました');
+                    hideAdminDeleteModal();
+                    loadRoomList(); // 部屋一覧を更新
+                } else {
+                    alert('エラー: ' + (data.error || '削除に失敗しました'));
+                }
+            })
+            .catch(error => {
+                console.error('Admin delete error:', error);
+                alert('部屋の削除中にエラーが発生しました');
+            });
+        }
+
         function showGameScreen() {
             document.getElementById('gameCard').classList.remove('hidden');
             document.getElementById('membersCard').classList.remove('hidden');
             document.getElementById('chatCard').classList.remove('hidden');
-
+            
             // ロビーエリアを隠す
             document.getElementById('lobbyArea').classList.add('hidden');
-
+            
             // メイン画面のレイアウトを変更
             document.getElementById('mainScreen').classList.add('in-room');
-        
+
             // 部屋情報を表示
             document.getElementById('roomTitle').textContent = currentRoom.name;
             document.getElementById('roomRule').textContent = currentRoom.rule === 'ex' ? 'EXスコア' : '通常スコア';
-        
-            // 部屋主かどうかをチェック
+
+            // 部屋主かどうかをチェック（ポイントリセットのみ表示）
             if (currentRoom.ownerId === currentUser.userId) {
                 document.getElementById('ownerControls').classList.remove('hidden');
             } else {
                 document.getElementById('ownerControls').classList.add('hidden');
             }
-        
+
             // 各エリアを初期状態にリセット
             clearSongHistory();
             clearRankings();
             clearChat();
             hideConcurrentSong();
-
+            
             updateRoleButtons('spectator');
         }
 
@@ -948,21 +1020,22 @@
             document.getElementById('gameCard').classList.add('hidden');
             document.getElementById('membersCard').classList.add('hidden');
             document.getElementById('chatCard').classList.add('hidden');
-
+            
             // ロビーエリアを再表示
             document.getElementById('lobbyArea').classList.remove('hidden');
-
+            
             // メイン画面のレイアウトを元に戻す
             document.getElementById('mainScreen').classList.remove('in-room');
-
+            
             // 各エリアをクリア
             clearSongHistory();
             clearRankings();
             clearChat();
-
+            
             currentRoom = null;
         }
 
+        // 新しいヘルパー関数を追加
         function clearSongHistory() {
             const songHistory = document.getElementById('songHistory');
             songHistory.innerHTML = '';
